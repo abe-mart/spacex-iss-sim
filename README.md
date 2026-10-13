@@ -1,4 +1,8 @@
-# Update on October 12, 2026: This page is being updated. Hackathon participants should not follow these instructions yet.
+# Dock the Capsule — hackathon website
+
+Play at https://dock-the-capsule.netlify.app. Start with manual practice, download the Python starter for Autopilot, or set up an AI Agent. The website includes the participant handbook and a three-track TV leaderboard.
+
+For the hosted app and local development, see [DEPLOYMENT.md](DEPLOYMENT.md). The original standalone simulator instructions are preserved below.
 
 # SpaceX ISS Docking Simulator, offline and scriptable
 

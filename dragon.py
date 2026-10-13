@@ -23,12 +23,49 @@ class DragonError(Exception):
 
 
 class Dragon:
-    def __init__(self, url="http://localhost:5555"):
+    def __init__(self, url="http://localhost:5555", token=None):
         self.url = url.rstrip("/")
+        self.token = token
+        self._event_bridge = None
+
+    @classmethod
+    def start_event(cls, event_url, track="autopilot", wait=True, open_browser=True):
+        """Open the packaged flight deck and start its loopback API automatically.
+
+        The browser must be on the same computer. With wait=True, this returns
+        after the participant joins/launches their flight in that browser.
+        """
+        from event_bridge import EventBridge
+        bridge = EventBridge(event_url, track=track, open_browser=open_browser)
+        client = cls(bridge.url, token=bridge.token)
+        client._event_bridge = bridge
+        print("Flight deck: " + bridge.page_url)
+        print("Join the event and click LAUNCH FLIGHT in the browser.")
+        if wait:
+            try:
+                bridge.wait_ready()
+            except Exception:
+                bridge.close()
+                raise
+        return client
+
+    def close(self):
+        """Stop only the event bridge owned by this client."""
+        if self._event_bridge:
+            self._event_bridge.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def _request(self, path, body=None):
         data = None if body is None else json.dumps(body).encode()
-        req = urllib.request.Request(self.url + path, data=data, headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        if self.token:
+            headers["X-Dock-Bridge"] = self.token
+        req = urllib.request.Request(self.url + path, data=data, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 return json.load(resp)

@@ -65,14 +65,17 @@ def translation_commands(s):
     return cmds
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", default="http://localhost:5555")
+    ap.add_argument("--event", help="Hosted event URL: automatically opens the packaged local simulator")
     ap.add_argument("--dt", type=float, default=0.2, help="seconds of sim time between control updates")
     ap.add_argument("--slow", action="store_true", help="pause the sim and advance it in fixed steps instead of flying in real time")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+    if args.event and args.slow:
+        ap.error("The event Autopilot track flies in real time. Pause/step is reserved for AI Agent.")
 
-    sim = Dragon(args.url)
+    sim = Dragon.start_event(args.event) if args.event else Dragon(args.url)
     print("resetting...")
     s = sim.reset()
     if args.slow:
@@ -99,6 +102,10 @@ def main():
 
     sim.resume()
     print("RESULT:", s["status"], "-", s["message"])
+    if args.event:
+        # Keep the helper available while the browser uploads or saves its receipt.
+        time.sleep(3)
+        sim.close()
     return 0 if s["status"] == "success" else 1
 
 

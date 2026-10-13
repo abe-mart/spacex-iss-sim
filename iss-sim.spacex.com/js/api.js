@@ -21,13 +21,17 @@
     var outcome = null; // "success" | "fail" once an attempt ends
     var outcomeMessage = "";
     var outcomeStep = null; // simStepCount when the attempt ended; time_s stops there
+    var outcomeState = null; // freeze contact telemetry before the ending animation moves the camera
 
     // Record why an attempt ended. hideInterface is a global, so wrapping it catches every call.
     var originalHideInterface = window.hideInterface;
     window.hideInterface = function (result) {
+        outcomeState = null;
+        var contact = getState();
         outcome = result;
         outcomeMessage = result === "fail" ? ($("#fail-message").textContent || "").trim() : "Docking successful.";
         outcomeStep = simStepCount;
+        outcomeState = Object.assign({}, contact, { status: result, message: outcomeMessage, time_s: round(outcomeStep / PHYSICS_HZ, 3) });
         simStepBudget = 0; // end any 'step' in progress: the attempt is over
         return originalHideInterface.apply(this, arguments);
     };
@@ -45,6 +49,7 @@
     }
 
     function getState() {
+        if (isGameOver && outcomeState) return JSON.parse(JSON.stringify(outcomeState));
         var ended = isGameOver && outcome !== null; // a human "play again" leaves outcome set until the next ending
         var s = {
             status: status(),
@@ -156,6 +161,7 @@
                         outcome = null;
                         outcomeMessage = "";
                         outcomeStep = null;
+                        outcomeState = null;
                         showInterface();
                     });
                 // "arriving": the start sequence is already running.
@@ -178,7 +184,8 @@
             if (!(seconds > 0 && seconds <= 60)) throw new Error("seconds must be > 0 and <= 60");
             if (!simPaused) throw new Error("'step' only works while paused; send 'pause' first");
             simStepBudget += Math.round(seconds * PHYSICS_HZ);
-            return waitFor(function () { return simStepBudget === 0; }, 120000, "the step to finish");
+            // The physics loop decrements once after a docking callback clears the budget.
+            return waitFor(function () { return simStepBudget <= 0; }, 120000, "the step to finish").then(function () { simStepBudget = 0; });
         },
     };
 
@@ -217,8 +224,8 @@
         pendingResults = [];
         fetch(bridgeUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ state: getState(), results: results }),
+            headers: Object.assign({ "Content-Type": "application/json" }, (window.dragonBridge && window.dragonBridge.headers) || {}),
+            body: JSON.stringify({ state: getState(), results: results, meta: window.dockBridgeMeta ? window.dockBridgeMeta() : undefined }),
         })
             .then(function (r) {
                 if (!r.ok) throw new Error("bridge HTTP " + r.status);
@@ -231,7 +238,7 @@
                 // Run commands strictly in order; each finishes before the next starts.
                 (msg.commands || []).forEach(function (c) {
                     commandQueue = commandQueue.then(function () {
-                        return command(c.command, c).then(function (res) {
+                        return window.dragon.command(c.command, c).then(function (res) {
                             res.id = c.id;
                             pendingResults.push(res);
                         });
