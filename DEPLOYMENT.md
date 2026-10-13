@@ -4,13 +4,13 @@ The browser runs the simulation. Netlify Functions store event settings, session
 
 ## Local development
 
-Install Node.js 22 or newer and Python 3.11 or newer. Run `npm install`, then `npm run dev`. Open http://127.0.0.1:8888. Development event data is kept in the ignored `.dock-data/event.json`; the development staff password defaults to `mission-control`. This fallback never runs in the deployed function.
+Install Node.js 22 or newer and Python 3.11 or newer. Run `npm ci`, then `npm run dev`. Open http://127.0.0.1:8888. Development event data is kept in the ignored `.dock-data/event.json`; the development staff password defaults to `mission-control`. This fallback never runs in the deployed function.
 
 Run `npm run check` and `npm run build` before deployment. The build generates the hosted pages and the downloadable Python starter ZIP in `dist/downloads`.
 
 ## Database and deployment
 
-1. Create a free Neon Postgres project. Test `db/migrations/001_dock.sql` on an isolated branch before applying it to production.
+1. For this existing site, reuse its Neon project (Dock the Capsule); do not create another project. For a separate installation, create a free Neon Postgres project. Test `db/migrations/001_dock.sql` on an isolated branch before applying it to production.
 2. Run `npm run db:migrate` with a **direct**, non-pooled `DATABASE_URL` injected into the process. The migration is idempotent. Keep connection strings out of Git and chat.
 3. Generate a salted staff password hash with `node scripts/password.mjs`, supplying the password through standard input. Use a unique password of at least 12 characters.
 4. In the Netlify project, configure server environment variables: pooled `DATABASE_URL`, `ADMIN_PASSWORD_HASH`, `SITE_URL`, and optional `EVENT_CODE`. Set them for the Functions runtime. The browser receives none of these secrets.
@@ -20,7 +20,7 @@ Run `npm run check` and `npm run build` before deployment. The build generates t
 
 - Open `/admin`, sign in, set the event name, event code, enabled tracks, and join URL. Share the site address and event code at the table.
 - Put `/leaderboard` on the TV and click fullscreen. It displays Manual Piloting, Autopilot, and AI Agent in three columns on a wide screen. `/leaderboard?demo=1` is explicitly labeled sample data.
-- New participants start at `/`. Manual practice needs no installation or API key. Python participants download and unzip the starter, open a terminal in its folder, and follow `/docs#autopilot`.
+- New participants start at `/`. Manual practice needs no installation or API key. Python participants download and unzip the starter, open a terminal in its folder, and follow `/setup/autopilot/`.
 - Successful flights rank by simulation time, then pulse count. Staff can exclude or restore results and export CSV. Results are client-reported with consistency checks; use staff review for disputed attempts.
 - If a local score upload fails, use `retry_scores.py` from the starter bundle. Hosted attempts have a retry button and retain the pending result in the current tab.
 - Close ranked entry in the admin panel after the event. Practice remains available. Monitor the Netlify and Neon usage dashboards during the event.
@@ -46,3 +46,15 @@ Flight timing: Manual Piloting and Autopilot run in real time. Event autopilots 
 Participant navigation: Beginner opens Manual Piloting; Intermediate opens `/setup/autopilot/`; Advanced opens `/setup/agent/`. Python downloads live on the dedicated setup pages. `/docs` is a guide chooser, and legacy track hash links redirect to their dedicated page. The public TV leaderboard displays the event join code; staff changes update that display within its cache/refresh window.
 
 Archive/reset: Staff enter an archive label and type ARCHIVE AND RESET in admin. All current flights and event settings are captured atomically before a new event ID is activated. Historic rows and immutable snapshots are retained. Late archived-event results cannot enter new standings. Settings and join code stay the same. Past event CSV downloads include excluded and unfinished attempts. Stop flying before resetting; TV caches can take 60 seconds to refresh.
+
+## Git continuous deployment
+
+Repository: `https://github.com/abe-mart/spacex-iss-sim`, production branch: `hackathon`.
+
+Connection status: pending GitHub repository authorization. The existing Netlify app installation only has access to selected repositories; add this fork to that selection, then finish Link repository in the existing `dock-the-capsule` Netlify project. Keep the existing project and runtime variables. Build command is `npm run build`, publish directory `dist`, functions directory `netlify/functions`; `netlify.toml` is authoritative.
+
+Once connected, pushes/merges to `hackathon` build and publish automatically. Use feature branches and pull requests into `hackathon`. Verify the first Git-triggered production deploy and commit SHA in the Netlify deploy list. Until connected, the site uses manual CLI deployments.
+
+Disable automatic Deploy Previews and branch deploys unless they use an isolated Neon branch and separate credentials. A preview sharing production DATABASE_URL can change the live event. Local development needs no production credentials.
+
+For an emergency manual release, run `npm run build`, then `netlify deploy --no-build --prod --dir dist --functions netlify/functions` from a linked checkout. After Git deployment is enabled, the next production-branch push replaces that manual release. Prefer fixing forward through Git.
