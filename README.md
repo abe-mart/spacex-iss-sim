@@ -73,7 +73,7 @@ Optional manual CAPCOM requests go directly from the browser to Anthropic using 
 
 Use `hackathon` as the integration branch in **abe-mart/spacex-iss-sim**. Create a feature branch, make changes, run checks/build, and open a pull request into `hackathon`. The original upstream repository is separate from this event fork.
 
-Netlify's intended production target is this fork's `hackathon` branch: `npm run build`, publish directory `dist`, functions in `netlify/functions`, configured in [netlify.toml](netlify.toml). Git continuous deployment requires the repository connection to be enabled in Netlify; see [DEPLOYMENT.md](DEPLOYMENT.md) for connection status and operations. Production pushes affect the live event, so merge reviewed changes deliberately.
+Netlify's connected production target is this fork's `hackathon` branch: `npm run build`, publish directory `dist`, functions in `netlify/functions`, configured in [netlify.toml](netlify.toml). Pushes and merges to `hackathon` automatically build and publish. Automatic PR previews and branch deploys are disabled to keep preview code away from the live event database. See [DEPLOYMENT.md](DEPLOYMENT.md) for operations. Production pushes affect the live event, so merge reviewed changes deliberately.
 
 GitHub access is enough to develop locally. Netlify and Neon access is only needed for production administration. Keep database URLs, staff credentials, provider keys, bridge tokens and score receipts out of Git. `.netlify/`, `.env` files, `.dock-data/` and participant receipts are ignored. Production secrets stay in Netlify's server environment; request access from the project owner instead of copying credentials into documentation.
 
@@ -82,3 +82,4 @@ Test database changes on an isolated Neon branch. Never use the live event for d
 See [DEPLOYMENT.md](DEPLOYMENT.md) for migrations, runtime variables, event operations, archive/reset and hosting usage estimates. Scores are client-reported with consistency checks; staff review disputed results. Windows has been exercised; an actual macOS smoke test remains useful before the event.
 
 The underlying simulator is SpaceX's work. This repository hosts and adapts an offline copy.
+

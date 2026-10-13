@@ -51,10 +51,8 @@ Archive/reset: Staff enter an archive label and type ARCHIVE AND RESET in admin.
 
 Repository: `https://github.com/abe-mart/spacex-iss-sim`, production branch: `hackathon`.
 
-Connection status: pending GitHub repository authorization. The existing Netlify app installation only has access to selected repositories; add this fork to that selection, then finish Link repository in the existing `dock-the-capsule` Netlify project. Keep the existing project and runtime variables. Build command is `npm run build`, publish directory `dist`, functions directory `netlify/functions`; `netlify.toml` is authoritative.
+Connection status: connected to the existing Netlify project `dock-the-capsule`. Production pushes/merges to `hackathon` build and publish automatically. Build command is `npm run build`, publish directory `dist`, functions directory `netlify/functions`; `netlify.toml` is authoritative. `.netlify/` remains ignored.
 
-Once connected, pushes/merges to `hackathon` build and publish automatically. Use feature branches and pull requests into `hackathon`. Verify the first Git-triggered production deploy and commit SHA in the Netlify deploy list. Until connected, the site uses manual CLI deployments.
-
-Disable automatic Deploy Previews and branch deploys unless they use an isolated Neon branch and separate credentials. A preview sharing production DATABASE_URL can change the live event. Local development needs no production credentials.
-
+Use feature branches and pull requests into `hackathon`. Automatic Deploy Previews and branch deploys are disabled. Enable them only with an isolated Neon branch and separate credentials: a preview sharing production DATABASE_URL can change the live event. Local development needs no production credentials.
 For an emergency manual release, run `npm run build`, then `netlify deploy --no-build --prod --dir dist --functions netlify/functions` from a linked checkout. After Git deployment is enabled, the next production-branch push replaces that manual release. Prefer fixing forward through Git.
+
