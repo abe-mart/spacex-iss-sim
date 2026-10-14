@@ -28,14 +28,16 @@ def exercise_controls(sim):
         return
     # A small sideways movement, followed by an opposing pulse.
     # No approach commands, target alignment, feedback loop, or docking solution.
-    sim.translate_right()
-    wait_sim_seconds(sim, 2)
+    print("Firing 8 right pulses; watch the capsule move for 5 simulation seconds.")
+    sim.translate_right(8)
+    wait_sim_seconds(sim, 5)
     show(sim, "After right pulse:")
-    sim.translate_left()
+    sim.translate_left(8)
     # Demonstrate batching rotation pulses and reading the resulting state.
-    sim.commands({"command": "yaw_left"}, {"command": "roll_right"})
-    wait_sim_seconds(sim, 1)
-    sim.commands({"command": "yaw_right"}, {"command": "roll_left"})
+    print("Testing yaw and roll together; watch the view rotate.")
+    sim.commands({"command": "yaw_left", "count": 4}, {"command": "roll_right", "count": 3})
+    wait_sim_seconds(sim, 3)
+    sim.commands({"command": "yaw_right", "count": 4}, {"command": "roll_left", "count": 3})
     show(sim, "Final sensors:")
 
 

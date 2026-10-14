@@ -10,8 +10,8 @@ class FakeSim:
         self.clock += self.speed * .5
         return {"practice": self.practice, "status": "flying", "time_s": self.clock}
 
-    def translate_right(self): self.calls.append("translate_right")
-    def translate_left(self): self.calls.append("translate_left")
+    def translate_right(self, count=1): self.calls.append("translate_right")
+    def translate_left(self, count=1): self.calls.append("translate_left")
     def commands(self, *commands): self.calls.extend(c["command"] for c in commands)
 
 
