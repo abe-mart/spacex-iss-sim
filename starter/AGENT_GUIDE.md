@@ -54,3 +54,5 @@ a new recorded attempt. Do not alter the browser's physics/state,
 use developer teleport controls, or submit fabricated scores. Keep the printed
 controller token private and stop when docked or failed. Cloud-only agents cannot
 reach localhost; use an agent with tools on this computer.
+
+Optional Challenge Mode may be active. Read the `challenge` field in telemetry and the mission brief in the flight panel. `noise` adds bounded, seeded position/velocity measurement noise; `broken` disables translate_left; `scrambled` permutes translation commands while leaving rotation unchanged. Diagnose or compensate before approaching. A reset retains the chosen mission. Standard docking has no faults.

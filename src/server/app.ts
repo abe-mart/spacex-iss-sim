@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import { RULES_VERSION, TRACKS, type BoardData, type Run, type Session, type Settings, type Track } from "../shared/types";
 import type { Store } from "./store";
 import {eventStart} from '../shared/start';
+import {CHALLENGES} from '../shared/challenges';
 
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export function passwordHash(password: string, salt = randomBytes(16).toString("hex")) {
@@ -63,8 +64,8 @@ export function validateFinish(body: Record<string, unknown>, run: Run) {
   return {outcome: outcome as Run['outcome'], time_s: Math.round(time*1000)/1000, pulses,
     message: typeof body.message==='string'?body.message.slice(0,200):'', finished_at:Date.now()};
 }
-export function makeBoards(runs: Run[], settings: Settings, assisted='all'): BoardData {
-  const eligible=runs.filter(r=>!r.excluded && r.rules_version===settings.rules_version);
+export function makeBoards(runs: Run[], settings: Settings, assisted='all',challenge='standard'): BoardData {
+  const eligible=runs.filter(r=>!r.excluded && r.rules_version===settings.rules_version && (r.challenge||'standard')===challenge);
   const boards: BoardData['boards']={manual:[],autopilot:[],agent:[]};
   for(const track of TRACKS) {
     const best=new Map<string,Run>();
@@ -75,7 +76,7 @@ export function makeBoards(runs: Run[], settings: Settings, assisted='all'): Boa
       if(!prev || run.time_s!<prev.time_s! || (run.time_s===prev.time_s && run.pulses!<prev.pulses!)) best.set(key,run);
     }
     boards[track]=[...best.values()].sort((a,b)=>a.time_s!-b.time_s! || a.pulses!-b.pulses! || a.created_at-b.created_at).slice(0,8).map(r=>({
-      id:r.id, callsign:r.callsign,track:r.track,assisted:r.assisted,model:r.model,
+      id:r.id, callsign:r.callsign,track:r.track,assisted:r.assisted,model:r.model,challenge:r.challenge,
       time_s:r.time_s!,pulses:r.pulses!,created_at:r.finished_at || r.created_at,
     }));
   }
@@ -143,11 +144,13 @@ export function createApp(store: Store, options: Options={}) {
       if(path==='/api/config' && request.method==='GET') return respond(publicSettings(s,!!options.development));
       if(path==='/api/leaderboard' && request.method==='GET') {
         if(!s.leaderboard_public) await who();
-        const board=makeBoards(await store.runs(),s,url.searchParams.get('assisted') || 'all');
+        const challenge=url.searchParams.get('challenge') || 'standard';
+        if(!Object.hasOwn(CHALLENGES,challenge))throw new ApiError(400,'Unknown challenge.');
+        const board=makeBoards(await store.runs(),s,url.searchParams.get('assisted') || 'all',challenge);
         if(s.leaderboard_public) {
           // Share public standings at the CDN; private standings and staff data stay uncached.
           headers.set('Netlify-CDN-Cache-Control','public, durable, max-age=30');
-          headers.set('Netlify-Vary','query=assisted, header=Origin');
+          headers.set('Netlify-Vary','query=assisted|challenge, header=Origin');
           headers.set('Vary','Origin');
         }
         return respond(board);
@@ -178,13 +181,18 @@ export function createApp(store: Store, options: Options={}) {
         if(!s.event_open) throw new ApiError(409,'The event is closed.');
         const b=await body();
         if(!s.enabled_tracks.includes(b.track as Track)) throw new ApiError(400,'This track is not available.');
+        const challenge=b.challenge===undefined?'standard':b.challenge;
+        if(typeof challenge!=='string')throw new ApiError(400,'Unknown challenge.');
+        if(!Object.hasOwn(CHALLENGES,challenge))throw new ApiError(400,'Unknown challenge.');
+        if(challenge!=='standard' && (b.track==='manual'||b.source!=='local'))throw new ApiError(400,'Challenge Mode uses the local Autopilot or AI Agent starter.');
+        if(challenge!=='standard' && b.challenge_version!==1)throw new ApiError(409,'Download the latest starter for Challenge Mode.');
         if(b.rules_version!==s.rules_version) throw new ApiError(409,'Update your starter bundle; its rules version is out of date.');
         if(s.start_seed && b.start_version!==1)throw new ApiError(409,'This event uses randomized starts. Reload the website or download the latest starter bundle.');
         const run: Run={event_id:s.event_id || 'legacy',id:randomUUID(),participant_id:user.participant_id,callsign:user.callsign,track:b.track as Track,
           source:b.source==='local'?'local':'hosted',assisted:b.assisted===true,model:typeof b.model==='string'?b.model.slice(0,80):'',
-          rules_version:s.rules_version,created_at:Date.now(),outcome:'flying',excluded:false};
+          rules_version:s.rules_version,challenge,created_at:Date.now(),outcome:'flying',excluded:false};
         if(s.start_seed)run.start_position=eventStart(s.start_seed);
-        await store.createRun(run); return respond({id:run.id,created_at:run.created_at,start_position:run.start_position},201);
+        await store.createRun(run); return respond({id:run.id,created_at:run.created_at,start_position:run.start_position,challenge,challenge_seed:s.start_seed||s.event_id||'legacy'},201);
       }
       const finish=path.match(/^\/api\/runs\/([a-f0-9-]{36})\/(finish|abort)$/);
       if(finish && request.method==='POST') {

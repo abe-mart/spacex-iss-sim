@@ -36,7 +36,7 @@ test('only successful public standings receive CDN caching, with separate origin
   const f=fixture();
   const publicBoard=await f.call('/api/leaderboard?assisted=solo');
   assert.equal(publicBoard.response.headers.get('netlify-cdn-cache-control'),'public, durable, max-age=30');
-  assert.equal(publicBoard.response.headers.get('netlify-vary'),'query=assisted, header=Origin');
+  assert.equal(publicBoard.response.headers.get('netlify-vary'),'query=assisted|challenge, header=Origin');
   assert.equal((await f.call('/api/admin')).response.headers.get('netlify-cdn-cache-control'),null);
   const settings=(await f.store.settings())!;settings.leaderboard_public=false;
   const denied=await f.call('/api/leaderboard');
@@ -47,6 +47,21 @@ test('only successful public standings receive CDN caching, with separate origin
   f.store.runs=async()=>{throw new Error('storage unavailable');};
   const failed=await f.call('/api/leaderboard');
   assert.equal(failed.response.status,503);assert.equal(failed.response.headers.get('netlify-cdn-cache-control'),null);
+});
+
+test('challenge runs validate the track and stay out of standard standings',async()=>{
+  const f=fixture(),token=await f.join();
+  const payload={track:'autopilot',source:'local',rules_version:RULES_VERSION,start_version:1,challenge_version:1,challenge:'noise'};
+  assert.equal((await f.call('/api/runs','POST',{...payload,track:'manual'},token)).response.status,400);
+  assert.equal((await f.call('/api/runs','POST',{...payload,challenge:'unknown'},token)).response.status,400);
+  const launched=await f.call('/api/runs','POST',payload,token);assert.equal(launched.response.status,201);
+  assert.equal(launched.data.challenge,'noise');
+  const result=await f.call(`/api/runs/${launched.data.id}/finish`,'POST',{outcome:'success',time_s:85.3,pulses:12,state},token);
+  assert.equal(result.response.status,200);
+  assert.equal((await f.call('/api/leaderboard')).data.boards.autopilot.length,0);
+  const board=await f.call('/api/leaderboard?challenge=noise');assert.equal(board.data.boards.autopilot.length,1);
+  assert.equal((await f.call('/api/leaderboard?challenge=broken')).data.boards.autopilot.length,0);
+  assert.equal((await f.call('/api/leaderboard?challenge=unknown')).response.status,400);
 });
 test('event code, run ownership, and expired credentials are enforced',async()=>{
   const f=fixture();assert.equal((await f.call('/api/join','POST',{callsign:'CREW',event_code:'wrong'})).response.status,401);

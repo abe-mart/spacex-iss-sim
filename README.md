@@ -85,3 +85,5 @@ The underlying simulator is SpaceX's work. This repository hosts and adapts an o
 
 
 Ranked starting positions are shared within an event, generated when the event is created or archived/reset. Practice starts vary on each launch. Read telemetry rather than hardcoding the original starting coordinates; see [DEPLOYMENT.md](DEPLOYMENT.md) for compatibility with existing events.
+
+Optional [Challenge Mode](https://dock-the-capsule.netlify.app/challenges/) extends local Autopilot and AI Agent with noisy measurements, a broken thruster, or scrambled translation inputs. Players choose the scenario before launch. Each scenario has separate standings, a shared event seed, and documented telemetry behavior in the starter API reference.

@@ -1,8 +1,18 @@
 import {$,api,flightTime,text} from './client';
 import {TRACKS,TRACK_LABELS,RULES_VERSION,type BoardData,type Score,type Track} from '../shared/types';
+import {CHALLENGES,type Challenge} from '../shared/challenges';
 
 const demo=new URLSearchParams(location.search).get('demo')==='1';
-const cacheKey='dock.tv.last';
+const requested=new URLSearchParams(location.search).get('challenge')||'standard';
+let challenge:Challenge=Object.hasOwn(CHALLENGES,requested)?requested as Challenge:'standard';
+const cacheKey='dock.tv.last.'+challenge;
+const mission=$<HTMLSelectElement>('mission');
+for(const [value,info]of Object.entries(CHALLENGES))mission.append(new Option(info.name,value));
+mission.value=challenge;
+document.body.classList.toggle('challenge-view',challenge!=='standard');
+($('assistance').closest('.tv-filter') as HTMLElement).hidden=challenge!=='standard';
+if(challenge!=='standard')document.querySelector('h1')!.append(text('small',CHALLENGES[challenge].name.toUpperCase(),'challenge-title'));
+mission.onchange=()=>{const url=new URL(location.href);if(mission.value==='standard')url.searchParams.delete('challenge');else url.searchParams.set('challenge',mission.value);location.href=url.href;};
 let previous: BoardData | undefined, lastSuccess=0, toastTimer: ReturnType<typeof setTimeout>;
 let refreshTimer: ReturnType<typeof setTimeout>, generation=0;
 const refreshInterval=30000, sessionLimit=12*3600000, openedAt=Date.now();
@@ -66,7 +76,7 @@ async function refresh() {
     return;
   }
   try {
-    const data=demo?demoData():await api<BoardData>(`/api/leaderboard?assisted=${($('assistance') as HTMLSelectElement).value}`);
+    const data=demo?demoData():await api<BoardData>(`/api/leaderboard?assisted=${($('assistance') as HTMLSelectElement).value}&challenge=${challenge}`);
     if(current!==generation)return;
     render(data); lastSuccess=Date.now(); status(demo?'SAMPLE DATA / PREVIEW':'LIVE STANDINGS',demo?'demo':'');
     failures=0;

@@ -47,3 +47,35 @@ test('the final Python step resolves when docking clears and the physics loop de
   const result=await command;
   assert.equal(result.ok,true);assert.equal(result.state.status,'success');assert.equal(sim.simStepBudget,0);
 });
+
+async function challengeSim(challenge:string,seed='event-one'){
+  const sim=simulator();sim.resetPosition=()=>{};
+  const result=await sim.dragon.command('reset',{challenge,challenge_seed:seed});assert.equal(result.ok,true);
+  return sim;
+}
+test('measurement noise is bounded, reproducible at a simulation step, and does not change truth',async()=>{
+  const a=await challengeSim('noise'),b=await challengeSim('noise');
+  const measured=a.dragon.getState(),truth=a.dragon.getFlightState();
+  assert.deepEqual(JSON.parse(JSON.stringify(measured)),JSON.parse(JSON.stringify(b.dragon.getState())));
+  assert.deepEqual(JSON.parse(JSON.stringify(measured)),JSON.parse(JSON.stringify(a.dragon.getState())));
+  for(const axis of ['x','y','z']){
+    assert.ok(Math.abs(measured.position[axis]-truth.position[axis])<=.5);
+    assert.ok(Math.abs(measured.velocity[axis]-truth.velocity[axis])<=.03);
+  }
+  a.simStepCount++;assert.notEqual(a.dragon.getState().position.x,measured.position.x);
+  a.hideInterface('success');assert.equal(a.dragon.getState().range,truth.range);
+});
+test('broken thruster is a no-op; scrambled translations form a repeatable permutation; standard reset clears faults',async()=>{
+  const sim=await challengeSim('broken');let fired='';
+  for(const [name,method]of Object.entries({translate_forward:'translateForward',translate_backward:'translateBackward',translate_left:'translateLeft',translate_right:'translateRight',translate_up:'translateUp',translate_down:'translateDown'}))sim[method]=()=>{fired=name;};
+  await sim.dragon.command('translate_left');assert.equal(fired,'');
+  await sim.dragon.command('translate_right');assert.equal(fired,'translate_right');
+  await sim.dragon.command('reset',{challenge:'scrambled',challenge_seed:'same'});
+  const commands=['translate_forward','translate_backward','translate_left','translate_right','translate_up','translate_down']; const mapping:string[]=[];
+  for(const command of commands){await sim.dragon.command(command);assert.notEqual(fired,command);mapping.push(fired);}
+  assert.equal(new Set(mapping).size,6);
+  await sim.dragon.command('reset',{challenge:'scrambled',challenge_seed:'same'});
+  for(let i=0;i<commands.length;i++){await sim.dragon.command(commands[i]);assert.equal(fired,mapping[i]);}
+  await sim.dragon.command('reset');await sim.dragon.command('translate_left');assert.equal(fired,'translate_left');
+});
+

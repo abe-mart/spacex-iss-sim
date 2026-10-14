@@ -24,6 +24,7 @@ export interface Session {
   expires_at: number;
 }
 export interface Run {
+  challenge?: string;
   start_position?: {x:number;y:number;z:number};
   event_id?: string;
   id: string;
@@ -44,6 +45,7 @@ export interface Run {
   exclusion_reason?: string;
 }
 export interface Score {
+  challenge?: string;
   id: string; callsign: string; track: Track; assisted: boolean; model: string;
   time_s: number; pulses: number; created_at: number;
 }

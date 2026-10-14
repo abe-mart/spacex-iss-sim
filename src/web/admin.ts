@@ -12,7 +12,7 @@ function renderRuns() {
   for(const r of visible) {
     const row=document.createElement('tr'); if(r.excluded)row.className='excluded-row';
     const crew=text('td',r.callsign); crew.append(text('small',new Date(r.created_at).toLocaleString())); row.append(crew);
-    row.append(text('td',TRACK_LABELS[r.track]),text('td',r.outcome==='success'?'DOCKED':r.outcome.toUpperCase(),r.outcome==='success'?'success-text':''),text('td',r.time_s===undefined?'—':flightTime(r.time_s)+'s'),text('td',r.pulses===undefined?'—':String(r.pulses)));
+    row.append(text('td',TRACK_LABELS[r.track]+(r.challenge && r.challenge!=='standard'?' / '+r.challenge:'')),text('td',r.outcome==='success'?'DOCKED':r.outcome.toUpperCase(),r.outcome==='success'?'success-text':''),text('td',r.time_s===undefined?'—':flightTime(r.time_s)+'s'),text('td',r.pulses===undefined?'—':String(r.pulses)));
     const info=text('td',r.source+(r.assisted?' · assisted':'')); info.append(text('small',r.excluded?r.exclusion_reason || 'Excluded':r.message || r.model || '')); row.append(info);
     const action=text('td',''); const button=text('button',r.excluded?'Restore':'Exclude','button secondary') as HTMLButtonElement;
     button.onclick=async()=>{button.disabled=true; try{await api(`/api/admin/runs/${r.id}`,'PATCH',{excluded:!r.excluded,reason:'Staff review'}); await load();status(r.excluded?'Score restored.':'Score excluded.');}catch(e){status(displayError(e));button.disabled=false;}};
@@ -46,7 +46,7 @@ for(const id of ['run-search','track-filter','outcome-filter'])$(id).addEventLis
 $('refresh-admin').onclick=()=>load().then(()=>status('Records refreshed.')).catch(e=>status(displayError(e)));
 $('logout-admin').onclick=async()=>{await api('/api/logout','POST'); location.reload();};
 function exportRuns(records:Run[],filename:string){
-  const keys=['id','callsign','track','outcome','time_s','pulses','assisted','model','source','excluded','exclusion_reason','message','rules_version','created_at','finished_at'] as const;
+  const keys=['id','callsign','track','challenge','outcome','time_s','pulses','assisted','model','source','excluded','exclusion_reason','message','rules_version','created_at','finished_at'] as const;
   const escape=(v:unknown)=>{let s=String(v??'');if(/^[=+@\-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
   const csv=[keys.join(','),...records.map(r=>keys.map(k=>escape(r[k])).join(','))].join('\r\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -59,3 +59,4 @@ $('archive-reset-form').addEventListener('submit',async e=>{
  catch(e){status(displayError(e));}finally{button.disabled=false;}
 });
 void load().catch(e=>{if((e as any).status!==401)status(displayError(e));});
+

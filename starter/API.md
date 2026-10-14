@@ -230,3 +230,7 @@ Only use the documented API for control; do not alter browser physics or scores.
 ## Starting positions
 
 Ranked flights receive the same randomized starting position for the current event. Autopilots and agents should read `position` from telemetry instead of assuming the original coordinates. A reset preserves that event scenario. Practice starts vary each launch. Download the latest bundle if the event asks you to update.
+
+## Challenge Mode
+
+Optional Challenge Mode is available in the local Autopilot and AI Agent flight panel before launch. Choose Standard docking to return to the normal leaderboard. Missions are Noisy Instruments (position ±0.5 m/axis, velocity ±0.03 m/s/axis), Broken Thruster (`translate_left` disabled), and Scrambled Controls (a seeded permutation of translation commands; rotation unchanged). Noise is deterministic per simulation step; polling while paused does not produce fresh noise. Telemetry includes `challenge`. Docking and submitted results use true physical state, not noisy measurements. Resets retain the selected scenario for that run. Each mission has separate standings and a shared event seed. The visual simulator HUD remains available; this is a controller challenge, not a tamper-proof competition.

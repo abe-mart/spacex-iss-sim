@@ -22,6 +22,23 @@
     var outcomeMessage = "";
     var outcomeStep = null; // simStepCount when the attempt ended; time_s stops there
     var outcomeState = null; // freeze contact telemetry before the ending animation moves the camera
+    var challenge = 'standard', challengeSeed = 0;
+    var translationCommands = ['translate_forward','translate_backward','translate_left','translate_right','translate_up','translate_down'];
+    function sample(step, channel) {
+        var h = (challengeSeed ^ Math.imul(step + 1, 374761393) ^ Math.imul(channel + 1, 668265263)) >>> 0;
+        h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+        return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1;
+    }
+    function measuredState() {
+        var s = getState();
+        s.challenge = challenge;
+        if(challenge === 'noise' && s.status === 'flying' && s.position) {
+            ['x','y','z'].forEach(function(axis,i){s.position[axis] += sample(simStepCount,i)*0.5;s.velocity[axis] += sample(simStepCount,i+3)*0.03;});
+            s.range = Math.hypot(s.position.x,s.position.y,s.position.z);
+            s.range_rate = (s.position.x*s.velocity.x+s.position.y*s.velocity.y+s.position.z*s.velocity.z)/s.range;
+        }
+        return s;
+    }
 
     // Record why an attempt ended. hideInterface is a global, so wrapping it catches every call.
     var originalHideInterface = window.hideInterface;
@@ -150,6 +167,8 @@
 
         // Start a fresh attempt from any state. Resolves once the vehicle is controllable.
         reset: function (name, opts) {
+            var selected = opts.challenge || 'standard';
+            if(['standard','noise','broken','scrambled'].indexOf(selected)<0)throw new Error('Unknown challenge');
             var start = opts.start_position;
             if (start && (!Number.isFinite(start.x) || !Number.isFinite(start.y) || !Number.isFinite(start.z) || start.x !== 200 || Math.abs(start.y) > 33 || Math.abs(start.z) > 33)) throw new Error('Invalid start position');
             var st;
@@ -180,6 +199,9 @@
                     translationVector.set(0, 0, 0);
                 }
                 simStepCount = 0; // time_s counts from the start of each attempt
+                challenge = selected;
+                challengeSeed = 2166136261;
+                String(opts.challenge_seed || 'practice').split('').forEach(function(c){challengeSeed=Math.imul(challengeSeed^c.charCodeAt(0),16777619)>>>0;});
             });
         },
 
@@ -200,17 +222,21 @@
     // Run a command. Returns a Promise resolving to { ok, command, state } or { ok: false, error }.
     function command(name, opts) {
         var fn = COMMANDS[name];
+        var index = translationCommands.indexOf(name);
+        if(challenge==='broken' && name==='translate_left')fn=pulse(function(){});
+        if(challenge==='scrambled' && index>=0)fn=COMMANDS[translationCommands[(index + 1 + challengeSeed % 5)%6]];
         if (!fn) return Promise.resolve({ ok: false, command: name, error: "unknown command '" + name + "'. Valid: " + Object.keys(COMMANDS).join(", "), state: getState() });
         return Promise.resolve()
             .then(function () { return fn(name, opts || {}); })
             .then(
-                function () { return { ok: true, command: name, state: getState() }; },
-                function (err) { return { ok: false, command: name, error: err.message, state: getState() }; }
+                function () { return { ok: true, command: name, state: measuredState() }; },
+                function (err) { return { ok: false, command: name, error: err.message, state: measuredState() }; }
             );
     }
 
     window.dragon = {
-        getState: getState,
+        getState: measuredState,
+        getFlightState: getState, // authoritative browser result; controllers use measured getState
         command: command,
         commands: Object.keys(COMMANDS),
         limits: LIMITS,
@@ -233,7 +259,7 @@
         fetch(bridgeUrl, {
             method: "POST",
             headers: Object.assign({ "Content-Type": "application/json" }, (window.dragonBridge && window.dragonBridge.headers) || {}),
-            body: JSON.stringify({ state: getState(), results: results, meta: window.dockBridgeMeta ? window.dockBridgeMeta() : undefined }),
+            body: JSON.stringify({ state: measuredState(), results: results, meta: window.dockBridgeMeta ? window.dockBridgeMeta() : undefined }),
         })
             .then(function (r) {
                 if (!r.ok) throw new Error("bridge HTTP " + r.status);

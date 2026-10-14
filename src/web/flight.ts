@@ -3,6 +3,7 @@ import {BrowserAI,CAPCOM_SYSTEM,capcomGuidance} from './ai';
 import {TRACK_LABELS,type Track} from '../shared/types';
 import {loadAgentBrief,copyBrief} from './agent-brief';
 import {eventStart,type StartPosition} from '../shared/start';
+import {CHALLENGES,type Challenge} from '../shared/challenges';
 
 const win=window as any;
 const params=new URLSearchParams(location.search);
@@ -13,14 +14,15 @@ const bridgeToken=new URLSearchParams(location.hash.slice(1)).get('bridge') || '
 if(bridgeToken)history.replaceState(null,'',location.pathname+location.search);
 win.dragonBridge=local?{url:'/bridge/sync',headers:{'X-Dock-Bridge':bridgeToken}}:{url:null};
 win.dockFlightReady=false;
-let run: {id:string;finished?:boolean;start_position?:StartPosition}|null=null, starting=false, pulseCount=0, busy=false, aiDisabled=false;
+let run: {id:string;finished?:boolean;start_position?:StartPosition;challenge?:Challenge;challenge_seed?:string}|null=null, starting=false, pulseCount=0, busy=false, aiDisabled=false;
+let selectedChallenge:Challenge='standard';
 let pending: {id:string;body:any}|null=null, lastStatus='', lastCall=0;
 const ai=new BrowserAI(), recent:string[]=[];
 win.dockBridgeMeta=()=>({ready:win.dockFlightReady,started:!!run,result:pending?{...pending,event_url:apiOrigin(),token:sessionToken()}:null});
 const panel=document.createElement('aside');panel.className='dock-flight-panel';
 panel.innerHTML=`<a class="flight-brand" id="event-home" href="/">◈ DOCK THE CAPSULE</a><h2>${TRACK_LABELS[track]}</h2><p>${track==='manual'?'First flight? Try unranked practice below. For a leaderboard attempt, enter a crew name and launch.':local?'Your local Python controller flies this capsule. Launch here to connect it.':'An AI agent makes live flight decisions. The capsule waits while it thinks.'}</p>
 ${local?'<span class="local-badge">● LOCAL BRIDGE / PYTHON CONNECTED</span>':''}
-${local&&track==='agent'?'<details open class="flight-help"><summary>Connect your agent</summary><p>Launch your flight, then copy this briefing into your local agent. It includes this helper’s API address and temporary token.</p><button id="copy-agent-brief" disabled>Copy agent briefing</button><textarea id="agent-brief" rows="7" readonly aria-label="Agent connection briefing"></textarea><p id="agent-copy-status" role="status">Keep your simulator tab and helper terminal open.</p></details>':''}
+${local&&track==='agent'?'<div class="agent-connect"><button id="copy-agent-brief" disabled>Copy agent briefing ↗</button><details class="flight-help"><summary>View connection briefing</summary><textarea id="agent-brief" rows="5" readonly aria-label="Agent connection briefing"></textarea></details><p id="agent-copy-status" role="status">Launch, then paste the briefing into your local agent.</p></div>':''}
 ${track==='manual'?'<details class="flight-help"><summary>How to dock</summary><ol><li>Start with <b>Fly unranked practice</b>.</li><li>Use arrows to bring pitch and yaw toward zero. Comma/period adjust roll.</li><li>Use W/S and A/D to center the station. E moves forward; Q brakes.</li><li>Make small taps. Slow down before reaching the port.</li></ol><p>The on-screen buttons work too. Practice as often as you like.</p></details>':''}
 <label>CREW NAME / CALLSIGN<input id="flight-callsign" maxlength="24" minlength="2" placeholder="Your crew name" autocomplete="nickname"></label><label>EVENT CODE<input id="flight-code" maxlength="64" placeholder="Ask at the table, if required" autocomplete="off"></label>
 <button id="flight-launch" class="launch-button">LAUNCH FLIGHT ↗</button><div class="flight-button-row"><button id="practice">Fly unranked practice</button><button id="flight-abort">Stop / abort</button></div>
@@ -29,6 +31,26 @@ ${!local&&track==='manual'?`<details id="ai-settings"><summary>CAPCOM / YOUR CLA
 <div id="flight-log" class="flight-log" aria-live="polite"></div>${track==='manual'&&!local?'<form id="radio-form" class="radio-form"><input id="radio-message" maxlength="300" placeholder="Ask CAPCOM…"><button>Send</button></form>':''}
 <div class="small-note">Keep this simulator tab visible.<br><a id="flight-board" href="/leaderboard" target="_blank" rel="noopener">LIVE STANDINGS ↗</a> · <a id="flight-docs" href="/docs" target="_blank" rel="noopener">HANDBOOK ↗</a></div>`;
 document.body.append(panel);document.body.classList.add('dock-flight','dock-start-required');
+panel.querySelector('h2 + p')?.classList.add('flight-intro');
+const setup=document.createElement('details');setup.className='crew-setup';setup.open=true;
+setup.innerHTML='<summary>Crew &amp; event</summary>';
+for(const id of ['flight-callsign','flight-code'])setup.append($(id).closest('label')!);
+panel.insertBefore(setup,$('flight-launch'));
+if(local&&track!=='manual'){
+  const choices=document.createElement('details');choices.className='challenge-settings';
+  choices.innerHTML='<summary>Optional · Challenge Mode</summary><label>MISSION<select id="challenge-select"></select></label><p id="challenge-brief"></p><a id="challenge-board" target="_blank" rel="noopener">Challenge standings ↗</a>';
+  panel.insertBefore(choices,$('flight-launch'));
+  const select=$<HTMLSelectElement>('challenge-select');
+  for(const [value,info]of Object.entries(CHALLENGES))select.append(new Option(info.name,value));
+  const update=()=>{selectedChallenge=select.value as Challenge;choices.querySelector('summary')!.textContent=selectedChallenge==='standard'?'Optional · Challenge Mode':'Mission · '+CHALLENGES[selectedChallenge].name;$('challenge-brief').textContent=CHALLENGES[selectedChallenge].brief;($<HTMLAnchorElement>('challenge-board')).href=apiOrigin()+'/leaderboard'+(selectedChallenge==='standard'?'':'?challenge='+selectedChallenge);$('challenge-board').textContent=selectedChallenge==='standard'?'Standard standings ↗':'Challenge standings ↗';};
+  select.onchange=update;update();
+}
+$('flight-abort').hidden=true;
+if($('radio-form'))$('radio-form').hidden=true;
+// One expanded setup section at a time keeps laptop panels compact.
+panel.querySelectorAll('details').forEach(detail=>detail.addEventListener('toggle',()=>{
+  if(detail.open)panel.querySelectorAll('details').forEach(other=>{if(other!==detail)other.open=false;});
+}));
 if(local&&track==='agent') {
   const field=$<HTMLTextAreaElement>('agent-brief'), note=$('agent-copy-status');
   loadAgentBrief(location.origin,bridgeToken).then(brief=>{field.value=brief;($<HTMLButtonElement>('copy-agent-brief')).disabled=false;}).catch(error=>{note.textContent=error.message;});
@@ -53,8 +75,10 @@ function fit(){if(!win.camera || !win.renderer)return;const small=innerWidth<=65
 window.addEventListener('resize',()=>setTimeout(fit,0));
 function allowedState(s:any){return {status:s.status,time_s:s.time_s,range:s.range,attitude:s.attitude,velocity:s.velocity,gravity:s.gravity};}
 async function savePending(){if(!pending)return;try{await api(`/api/runs/${pending.id}/finish`,'POST',pending.body);pending=null;$('retry-score').hidden=true;$('discard-score').hidden=true;try{sessionStorage.removeItem('dock.pending-score');}catch{}status('Flight recorded. Check the live standings.','success');}catch(e){$('retry-score').hidden=false;$('discard-score').hidden=false;const permanent=[400,401,404,409].includes((e as any)?.status);status(permanent?`This result cannot be uploaded: ${displayError(e)} Discard it below to start fresh.`:`Score saved in this tab. ${displayError(e)} Retry when connected.`,'error');}}
-async function finish(outcome:'success'|'fail'|'abort',s=state()){
+async function finish(outcome:'success'|'fail'|'abort',s=win.dragon?.getFlightState()||state()){
   win.dockFlightReady=false;if(!run||run.finished)return;run.finished=true;
+  panel.classList.remove('in-flight');($<HTMLButtonElement>('flight-launch')).disabled=false;$('flight-launch').textContent='LAUNCH ANOTHER FLIGHT ↗';$('practice').hidden=false;$('flight-abort').hidden=true;
+  if(local&&track!=='manual')($<HTMLSelectElement>('challenge-select')).disabled=false;
   const body={outcome,time_s:Number(s.time_s)||0,pulses:pulseCount,message:String(s.message || '').slice(0,200),state:allowedState(s)};
   log(outcome==='success'?'DOCKED':'FLIGHT ENDED',`${flightTime(body.time_s)} simulation seconds · ${pulseCount} pulses`);
   if(run.id==='practice'){status(outcome==='success'?'Practice docking complete. Start a ranked flight to join the standings.':'Practice ended. Launch again when ready.');($('flight-callsign') as HTMLInputElement).disabled=false;return;}
@@ -70,15 +94,18 @@ async function start(practice=false){
   try{
     if(run&&!run.finished)await finish('abort');
     if(!practice){const crew=($('flight-callsign') as HTMLInputElement).value.trim();const joined=await api('/api/join','POST',{callsign:crew,event_code:($('flight-code') as HTMLInputElement).value});rememberSession(joined.token,joined.callsign);
-      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:track==='manual'&&ai.connected&&($('enable-capcom') as HTMLInputElement)?.checked,model:ai.connected?ai.model:'',rules_version:RULES_VERSION,start_version:1});
-    }else run={id:'practice',start_position:eventStart(crypto.randomUUID())};
+      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:track==='manual'&&ai.connected&&($('enable-capcom') as HTMLInputElement)?.checked,model:ai.connected?ai.model:'',rules_version:RULES_VERSION,start_version:1,challenge:selectedChallenge,challenge_version:1});
+    }else run={id:'practice',start_position:eventStart(crypto.randomUUID()),challenge:selectedChallenge,challenge_seed:crypto.randomUUID()};
     pulseCount=0;aiDisabled=false;lastCall=0;lastStatus='';status('Capsule arriving. Stand by…');
     await cmd('reset');await cmd('gravity_on');await cmd('translation_fine');await cmd('rotation_fine');
     if(track==='agent')await cmd('pause');else await cmd('resume');
     win.dockFlightReady=true;document.body.classList.remove('dock-start-required');($('flight-callsign') as HTMLInputElement).disabled=true;
+    panel.classList.add('in-flight');setup.open=false;panel.querySelectorAll('details').forEach(e=>e.open=false);$('practice').hidden=true;$('flight-abort').hidden=false;
+    if(local&&track!=='manual')($<HTMLSelectElement>('challenge-select')).disabled=true;
+    if(run?.challenge && run.challenge!=='standard')log('CHALLENGE · '+CHALLENGES[run.challenge].name,CHALLENGES[run.challenge].brief);
     status((local?'Local controller ready. Python can read state and fire thrusters.':'Flight live. Line up your attitude, then approach.')+(practice?' Randomized practice start.':run?.start_position?' Shared event start: identical for every ranked flight.':''));
   }catch(e){status(displayError(e),'error');if(run&&!run.finished){try{await finish('abort');}catch{}}}
-  finally{starting=false;($('flight-launch') as HTMLButtonElement).disabled=false;}
+  finally{starting=false;($('flight-launch') as HTMLButtonElement).disabled=!!run&&!run.finished;}
 }
 async function coaching(message=''){
   if(busy||!ai.connected||!run||run.finished||aiDisabled||state().status!=='flying')return;
@@ -89,9 +116,9 @@ async function coaching(message=''){
 if(!local&&track==='manual'){
   $('orders-label').hidden=true;
   $('connect-ai').onclick=async()=>{const input=$('claude-key') as HTMLInputElement;const key=input.value.trim();input.value='';if(!key){status('Enter your own API key.','error');return;}
-    try{ai.connect(key);const models=await ai.models();const select=$('claude-model') as HTMLSelectElement;select.replaceChildren();for(const m of models){const option=document.createElement('option');option.value=m.id;option.textContent=m.name;select.append(option);}const economical=models.find(m=>m.id.includes('haiku'));if(economical)select.value=economical.id;ai.model=select.value;if(!ai.model)throw new Error('This key has no available models.');($('enable-capcom') as HTMLInputElement).checked=true;aiDisabled=false;status('Your key is connected. Requests go directly to Anthropic.');}
-    catch(e){ai.disconnect();status(displayError(e),'error');}};
-  $('disconnect-ai').onclick=()=>{ai.disconnect();($('claude-key') as HTMLInputElement).value='';($('claude-model') as HTMLSelectElement).replaceChildren(new Option('Connect to load available models',''));status('Key cleared. CAPCOM disconnected.');};
+    try{ai.connect(key);const models=await ai.models();const select=$('claude-model') as HTMLSelectElement;select.replaceChildren();for(const m of models){const option=document.createElement('option');option.value=m.id;option.textContent=m.name;select.append(option);}const economical=models.find(m=>m.id.includes('haiku'));if(economical)select.value=economical.id;ai.model=select.value;if(!ai.model)throw new Error('This key has no available models.');($('enable-capcom') as HTMLInputElement).checked=true;aiDisabled=false;$('radio-form').hidden=false;status('Your key is connected. Requests go directly to Anthropic.');}
+    catch(e){ai.disconnect();$('radio-form').hidden=true;status(displayError(e),'error');}};
+  $('disconnect-ai').onclick=()=>{ai.disconnect();$('radio-form').hidden=true;($('claude-key') as HTMLInputElement).value='';($('claude-model') as HTMLSelectElement).replaceChildren(new Option('Connect to load available models',''));status('Key cleared. CAPCOM disconnected.');};
   $('claude-model').onchange=()=>{ai.model=($('claude-model') as HTMLSelectElement).value;};
   $('radio-form')?.addEventListener('submit',e=>{e.preventDefault();const input=$('radio-message') as HTMLInputElement;const message=input.value.trim();input.value='';if(message){log('CREW',message);void coaching(message);}});
 }
@@ -107,9 +134,14 @@ async function boot(){
     try {
     if(name==='reset' && run && !starting && !(state().time_s<0.1 && !run.finished)){if(!run.finished)await finish('abort');
       if(pending)throw new Error('Previous score is waiting for upload.');
-      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:false,model:'',rules_version:RULES_VERSION,start_version:1});pulseCount=0;lastStatus='';win.dockFlightReady=true;}
-    const result=await original(name,name==='reset'?{...options,start_position:run?.start_position}:options);
-    if(name==='reset' && result.ok && local)await original(track==='agent'?'pause':'resume',{});
+      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:false,model:'',rules_version:RULES_VERSION,start_version:1,challenge:selectedChallenge,challenge_version:1});pulseCount=0;lastStatus='';win.dockFlightReady=true;}
+    const result=await original(name,name==='reset'?{...options,start_position:run?.start_position,challenge:run?.challenge||'standard',challenge_seed:run?.challenge_seed}:options);
+    if(name==='reset' && result.ok && local){
+      await original(track==='agent'?'pause':'resume',{});
+      panel.classList.add('in-flight');panel.querySelectorAll('details').forEach(e=>e.open=false);
+      $('practice').hidden=true;$('flight-abort').hidden=false;($<HTMLSelectElement>('challenge-select')).disabled=true;
+      ($<HTMLButtonElement>('flight-launch')).disabled=true;
+    }
     return result;
     } catch(e) { return {ok:false,command:name,error:displayError(e),state:state()}; }
   };
@@ -120,7 +152,7 @@ async function boot(){
   for(const root of ['success','fail'])document.getElementById(root)?.querySelectorAll('.message-button').forEach(button=>button.addEventListener('click',e=>{e.stopImmediatePropagation();void start();},true));
   setInterval(()=>{const s=state();$('flight-clock').replaceChildren(document.createTextNode(flightTime(s.time_s||0)),text('small','SIM TIME'));
     if(!run || run.finished || starting)return;
-    if((s.status==='success'||s.status==='fail') && s.status!==lastStatus){lastStatus=s.status;void finish(s.status,s);}
+    if((s.status==='success'||s.status==='fail') && s.status!==lastStatus){lastStatus=s.status;void finish(s.status);}
     if(track==='manual'&&!local&&ai.connected&&($('enable-capcom') as HTMLInputElement).checked&&!busy&&Date.now()-lastCall>15000)void coaching();
   },250);
   try{const config=await api('/api/config');if(!config.join_required)($('flight-code') as HTMLInputElement).placeholder='No code required';if(!config.enabled_tracks.includes(track))($('flight-launch') as HTMLButtonElement).disabled=true;
@@ -128,4 +160,5 @@ async function boot(){
   catch{status('Event service unavailable. Unranked practice is available; ranked flights need a connection.','error');}
 }
 void boot();
+
 
