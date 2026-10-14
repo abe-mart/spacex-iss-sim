@@ -13,9 +13,24 @@ function fixture(){const store=new MemoryStore();const app=createApp(store,{even
     return {response,data:await response.json()};
   }
   async function join(name='TEST CREW'){return (await call('/api/join','POST',{callsign:name,event_code:'DOCK'})).data.token as string;}
-  async function launch(token:string,track='autopilot'){return (await call('/api/runs','POST',{track,source:'local',rules_version:RULES_VERSION},token)).data.id as string;}
+  async function launch(token:string,track='autopilot'){return (await call('/api/runs','POST',{track,source:'local',rules_version:RULES_VERSION,start_version:1},token)).data.id as string;}
   return {store,call,join,launch};
 }
+
+test('ranked starts are shared across tracks and legacy clients cannot enter randomized events',async()=>{
+  const f=fixture(), token=await f.join();
+  const starts=[];
+  for(const track of ['manual','autopilot','agent']){
+    const result=await f.call('/api/runs','POST',{track,rules_version:RULES_VERSION,start_version:1},token);
+    assert.equal(result.response.status,201);starts.push(result.data.start_position);
+    assert.deepEqual((await f.store.run(result.data.id))?.start_position,result.data.start_position);
+  }
+  assert.deepEqual(starts[0],starts[1]);assert.deepEqual(starts[1],starts[2]);
+  assert.equal((await f.call('/api/runs','POST',{track:'manual',rules_version:RULES_VERSION},token)).response.status,409);
+  const settings=await f.store.settings();delete settings!.start_seed;await f.store.saveSettings(settings!);
+  const legacy=await f.call('/api/runs','POST',{track:'manual',rules_version:RULES_VERSION},token);
+  assert.equal(legacy.response.status,201);assert.equal(legacy.data.start_position,undefined);
+});
 
 test('only successful public standings receive CDN caching, with separate origin and filter keys',async()=>{
   const f=fixture();

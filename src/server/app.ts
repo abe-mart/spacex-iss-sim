@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import { RULES_VERSION, TRACKS, type BoardData, type Run, type Session, type Settings, type Track } from "../shared/types";
 import type { Store } from "./store";
+import {eventStart} from '../shared/start';
 
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export function passwordHash(password: string, salt = randomBytes(16).toString("hex")) {
@@ -87,7 +88,7 @@ export function createApp(store: Store, options: Options={}) {
   async function settings(origin: string) {
     let s=await store.settings();
     if(!s) {
-      s={event_name:'Dock the Capsule',event_code_hash:options.eventCode?digest(options.eventCode):'',event_open:true,
+      s={start_seed:randomUUID(),event_name:'Dock the Capsule',event_code_hash:options.eventCode?digest(options.eventCode):'',event_open:true,
         leaderboard_public:true,join_url:options.siteUrl || origin,enabled_tracks:[...TRACKS],rules_version:RULES_VERSION};
       await store.saveSettings(s);
     }
@@ -178,10 +179,12 @@ export function createApp(store: Store, options: Options={}) {
         const b=await body();
         if(!s.enabled_tracks.includes(b.track as Track)) throw new ApiError(400,'This track is not available.');
         if(b.rules_version!==s.rules_version) throw new ApiError(409,'Update your starter bundle; its rules version is out of date.');
+        if(s.start_seed && b.start_version!==1)throw new ApiError(409,'This event uses randomized starts. Reload the website or download the latest starter bundle.');
         const run: Run={event_id:s.event_id || 'legacy',id:randomUUID(),participant_id:user.participant_id,callsign:user.callsign,track:b.track as Track,
           source:b.source==='local'?'local':'hosted',assisted:b.assisted===true,model:typeof b.model==='string'?b.model.slice(0,80):'',
           rules_version:s.rules_version,created_at:Date.now(),outcome:'flying',excluded:false};
-        await store.createRun(run); return respond({id:run.id,created_at:run.created_at},201);
+        if(s.start_seed)run.start_position=eventStart(s.start_seed);
+        await store.createRun(run); return respond({id:run.id,created_at:run.created_at,start_position:run.start_position},201);
       }
       const finish=path.match(/^\/api\/runs\/([a-f0-9-]{36})\/(finish|abort)$/);
       if(finish && request.method==='POST') {
@@ -204,7 +207,7 @@ export function createApp(store: Store, options: Options={}) {
         const label=typeof b.label==='string'?b.label.trim().slice(0,80):'';
         if(!label)throw new ApiError(400,'Give this archive a name.');
         const archive={id:randomUUID(),label,archived_at:Date.now(),settings:s};
-        const next={...s,event_id:randomUUID()};
+        const next={...s,event_id:randomUUID(),start_seed:randomUUID()};
         if(!await store.archiveAndReset(s.event_id||'legacy',archive,next))throw new ApiError(409,'The event already changed. Refresh before resetting.');
         return respond({ok:true,archive_id:archive.id,settings:publicSettings(next,!!options.development)});
       }

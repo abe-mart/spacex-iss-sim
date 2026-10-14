@@ -25,6 +25,21 @@ test('completion telemetry remains at contact while the ending animation moves t
   assert.equal(sim.dragon.getState().attitude.yaw,0);
 });
 
+test('reset applies the scenario in HUD coordinates and clears velocity and clock',async()=>{
+  const sim=simulator();
+  const vector=(object:any)=>{object.set=(x:number,y:number,z:number)=>Object.assign(object,{x,y,z});return object;};
+  vector(sim.camera.position);vector(sim.motionVector);sim.translationVector=vector({});
+  sim.gsap={killTweensOf:()=>{}};sim.resetPosition=()=>{};
+  sim.issObject.position={x:4,y:8,z:-150};
+  const result=await sim.dragon.command('reset',{start_position:{x:200,y:-16,z:27.713}});
+  assert.equal(result.ok,true);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.state.position)),{x:200,y:-16,z:27.713});
+  assert.equal(result.state.time_s,0);
+  assert.equal(result.state.velocity.x,0);assert.equal(result.state.velocity.y,0);assert.equal(result.state.velocity.z,0);
+  const invalid=await sim.dragon.command('reset',{start_position:{x:0,y:0,z:0}});
+  assert.equal(invalid.ok,false);
+});
+
 test('the final Python step resolves when docking clears and the physics loop decrements its budget',async()=>{
   const sim=simulator();
   const command=sim.dragon.command('step',{seconds:.2});

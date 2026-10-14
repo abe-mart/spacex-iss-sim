@@ -83,3 +83,5 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for migrations, runtime variables, event oper
 
 The underlying simulator is SpaceX's work. This repository hosts and adapts an offline copy.
 
+
+Ranked starting positions are shared within an event, generated when the event is created or archived/reset. Practice starts vary on each launch. Read telemetry rather than hardcoding the original starting coordinates; see [DEPLOYMENT.md](DEPLOYMENT.md) for compatibility with existing events.

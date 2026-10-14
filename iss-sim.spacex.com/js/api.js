@@ -149,7 +149,9 @@
         gravity_off: function () { isGravity && toggleGravity(); },
 
         // Start a fresh attempt from any state. Resolves once the vehicle is controllable.
-        reset: function () {
+        reset: function (name, opts) {
+            var start = opts.start_position;
+            if (start && (!Number.isFinite(start.x) || !Number.isFinite(start.y) || !Number.isFinite(start.z) || start.x !== 200 || Math.abs(start.y) > 33 || Math.abs(start.z) > 33)) throw new Error('Invalid start position');
             var st;
             return waitFor(function () { return isEventsEnabled; }, 120000, "the simulator to load").then(function () {
                 st = status();
@@ -171,6 +173,12 @@
                 // resetPosition() tweens back to the start point over 5 s; wait it out.
                 return st === "flying" ? new Promise(function (r) { setTimeout(r, 5200); }) : null;
             }).then(function () {
+                if (start) {
+                    gsap.killTweensOf(camera.position);
+                    camera.position.set(issObject.position.x + start.y, issObject.position.y + start.z, issObject.position.z + start.x);
+                    motionVector.set(0, 0, 0);
+                    translationVector.set(0, 0, 0);
+                }
                 simStepCount = 0; // time_s counts from the start of each attempt
             });
         },

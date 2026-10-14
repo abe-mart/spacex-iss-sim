@@ -5,6 +5,7 @@ export const TRACK_LABELS: Record<Track, string> = {
   manual: "Manual Piloting", autopilot: "Autopilot", agent: "AI Agent",
 };
 export interface Settings {
+  start_seed?: string;
   event_id?: string;
   event_name: string;
   event_code_hash: string;
@@ -23,6 +24,7 @@ export interface Session {
   expires_at: number;
 }
 export interface Run {
+  start_position?: {x:number;y:number;z:number};
   event_id?: string;
   id: string;
   participant_id: string;

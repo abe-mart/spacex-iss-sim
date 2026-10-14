@@ -226,3 +226,7 @@ A successful flight automatically submits to the leaderboard. If the upload
 fails, use Retry score upload in the flight panel or `python retry_scores.py`.
 Participant event sessions last eight hours. Keep `.dock-receipts` private.
 Only use the documented API for control; do not alter browser physics or scores.
+
+## Starting positions
+
+Ranked flights receive the same randomized starting position for the current event. Autopilots and agents should read `position` from telemetry instead of assuming the original coordinates. A reset preserves that event scenario. Practice starts vary each launch. Download the latest bundle if the event asks you to update.

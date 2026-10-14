@@ -2,6 +2,7 @@ import {$,api,apiOrigin,callsign,displayError,rememberSession,sessionToken,fligh
 import {BrowserAI,CAPCOM_SYSTEM,capcomGuidance} from './ai';
 import {TRACK_LABELS,type Track} from '../shared/types';
 import {loadAgentBrief,copyBrief} from './agent-brief';
+import {eventStart,type StartPosition} from '../shared/start';
 
 const win=window as any;
 const params=new URLSearchParams(location.search);
@@ -12,7 +13,7 @@ const bridgeToken=new URLSearchParams(location.hash.slice(1)).get('bridge') || '
 if(bridgeToken)history.replaceState(null,'',location.pathname+location.search);
 win.dragonBridge=local?{url:'/bridge/sync',headers:{'X-Dock-Bridge':bridgeToken}}:{url:null};
 win.dockFlightReady=false;
-let run: {id:string;finished?:boolean}|null=null, starting=false, pulseCount=0, busy=false, aiDisabled=false;
+let run: {id:string;finished?:boolean;start_position?:StartPosition}|null=null, starting=false, pulseCount=0, busy=false, aiDisabled=false;
 let pending: {id:string;body:any}|null=null, lastStatus='', lastCall=0;
 const ai=new BrowserAI(), recent:string[]=[];
 win.dockBridgeMeta=()=>({ready:win.dockFlightReady,started:!!run,result:pending?{...pending,event_url:apiOrigin(),token:sessionToken()}:null});
@@ -69,13 +70,13 @@ async function start(practice=false){
   try{
     if(run&&!run.finished)await finish('abort');
     if(!practice){const crew=($('flight-callsign') as HTMLInputElement).value.trim();const joined=await api('/api/join','POST',{callsign:crew,event_code:($('flight-code') as HTMLInputElement).value});rememberSession(joined.token,joined.callsign);
-      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:track==='manual'&&ai.connected&&($('enable-capcom') as HTMLInputElement)?.checked,model:ai.connected?ai.model:'',rules_version:RULES_VERSION});
-    }else run={id:'practice'};
+      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:track==='manual'&&ai.connected&&($('enable-capcom') as HTMLInputElement)?.checked,model:ai.connected?ai.model:'',rules_version:RULES_VERSION,start_version:1});
+    }else run={id:'practice',start_position:eventStart(crypto.randomUUID())};
     pulseCount=0;aiDisabled=false;lastCall=0;lastStatus='';status('Capsule arriving. Stand by…');
     await cmd('reset');await cmd('gravity_on');await cmd('translation_fine');await cmd('rotation_fine');
     if(track==='agent')await cmd('pause');else await cmd('resume');
     win.dockFlightReady=true;document.body.classList.remove('dock-start-required');($('flight-callsign') as HTMLInputElement).disabled=true;
-    status(local?'Local controller ready. Python can read state and fire thrusters.':'Flight live. Line up your attitude, then approach.');
+    status((local?'Local controller ready. Python can read state and fire thrusters.':'Flight live. Line up your attitude, then approach.')+(practice?' Randomized practice start.':run?.start_position?' Shared event start: identical for every ranked flight.':''));
   }catch(e){status(displayError(e),'error');if(run&&!run.finished){try{await finish('abort');}catch{}}}
   finally{starting=false;($('flight-launch') as HTMLButtonElement).disabled=false;}
 }
@@ -106,8 +107,8 @@ async function boot(){
     try {
     if(name==='reset' && run && !starting && !(state().time_s<0.1 && !run.finished)){if(!run.finished)await finish('abort');
       if(pending)throw new Error('Previous score is waiting for upload.');
-      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:false,model:'',rules_version:RULES_VERSION});pulseCount=0;lastStatus='';win.dockFlightReady=true;}
-    const result=await original(name,options);
+      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:false,model:'',rules_version:RULES_VERSION,start_version:1});pulseCount=0;lastStatus='';win.dockFlightReady=true;}
+    const result=await original(name,name==='reset'?{...options,start_position:run?.start_position}:options);
     if(name==='reset' && result.ok && local)await original(track==='agent'?'pause':'resume',{});
     return result;
     } catch(e) { return {ok:false,command:name,error:displayError(e),state:state()}; }
@@ -127,3 +128,4 @@ async function boot(){
   catch{status('Event service unavailable. Unranked practice is available; ranked flights need a connection.','error');}
 }
 void boot();
+
