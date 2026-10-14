@@ -16,6 +16,9 @@ win.dragonBridge=local?{url:'/bridge/sync',headers:{'X-Dock-Bridge':bridgeToken}
 win.dockFlightReady=false;
 let run: {id:string;finished?:boolean;start_position?:StartPosition;challenge?:Challenge;challenge_seed?:string}|null=null, starting=false, pulseCount=0, busy=false, aiDisabled=false;
 let selectedChallenge:Challenge='standard';
+let practiceSpeed=1;
+win.dockSimulationSpeed=()=>run?.id==='practice'&&!run.finished?practiceSpeed:1;
+win.dockIsPractice=()=>run?.id==='practice';
 let pending: {id:string;body:any}|null=null, lastStatus='', lastCall=0;
 const ai=new BrowserAI(), recent:string[]=[];
 win.dockBridgeMeta=()=>({ready:win.dockFlightReady,started:!!run,result:pending?{...pending,event_url:apiOrigin(),token:sessionToken()}:null});
@@ -36,6 +39,10 @@ const setup=document.createElement('details');setup.className='crew-setup';setup
 setup.innerHTML='<summary>Crew &amp; event</summary>';
 for(const id of ['flight-callsign','flight-code'])setup.append($(id).closest('label')!);
 panel.insertBefore(setup,$('flight-launch'));
+const testing=document.createElement('details');testing.className='practice-settings';
+testing.innerHTML='<summary>Practice &amp; testing speed</summary><label>PRACTICE SPEED<select id="practice-speed"><option value="1">1× · real time</option><option value="2">2× · faster testing</option><option value="4">4× · fast testing</option><option value="8">8× · maximum</option></select></label><p>Choose a speed, then click Fly unranked practice. Ranked flights always run at 1×. Keep the tab visible; actual speed depends on your laptop.</p>';
+panel.insertBefore(testing,$('flight-launch'));
+$('practice-speed').onchange=()=>{practiceSpeed=Number(($<HTMLSelectElement>('practice-speed')).value);if(run?.id==='practice'&&!run.finished)status(`Unranked practice · ${practiceSpeed}× speed · no leaderboard score.`);};
 if(local&&track!=='manual'){
   const choices=document.createElement('details');choices.className='challenge-settings';
   choices.innerHTML='<summary>Optional · Challenge Mode</summary><label>MISSION<select id="challenge-select"></select></label><p id="challenge-brief"></p><a id="challenge-board" target="_blank" rel="noopener">Challenge standings ↗</a>';
@@ -98,12 +105,12 @@ async function start(practice=false){
     }else run={id:'practice',start_position:eventStart(crypto.randomUUID()),challenge:selectedChallenge,challenge_seed:crypto.randomUUID()};
     pulseCount=0;aiDisabled=false;lastCall=0;lastStatus='';status('Capsule arriving. Stand by…');
     await cmd('reset');await cmd('gravity_on');await cmd('translation_fine');await cmd('rotation_fine');
-    if(track==='agent')await cmd('pause');else await cmd('resume');
+    if(track==='agent'&&!practice)await cmd('pause');else await cmd('resume');
     win.dockFlightReady=true;document.body.classList.remove('dock-start-required');($('flight-callsign') as HTMLInputElement).disabled=true;
     panel.classList.add('in-flight');setup.open=false;panel.querySelectorAll('details').forEach(e=>e.open=false);$('practice').hidden=true;$('flight-abort').hidden=false;
     if(local&&track!=='manual')($<HTMLSelectElement>('challenge-select')).disabled=true;
     if(run?.challenge && run.challenge!=='standard')log('CHALLENGE · '+CHALLENGES[run.challenge].name,CHALLENGES[run.challenge].brief);
-    status((local?'Local controller ready. Python can read state and fire thrusters.':'Flight live. Line up your attitude, then approach.')+(practice?' Randomized practice start.':run?.start_position?' Shared event start: identical for every ranked flight.':''));
+    status(practice?`Unranked practice · ${practiceSpeed}× speed · no leaderboard score.`:(local?'Local controller ready. Python can read state and fire thrusters.':'Flight live. Line up your attitude, then approach.')+(run?.start_position?' Shared event start: identical for every ranked flight.':''));
   }catch(e){status(displayError(e),'error');if(run&&!run.finished){try{await finish('abort');}catch{}}}
   finally{starting=false;($('flight-launch') as HTMLButtonElement).disabled=!!run&&!run.finished;}
 }
@@ -134,10 +141,10 @@ async function boot(){
     try {
     if(name==='reset' && run && !starting && !(state().time_s<0.1 && !run.finished)){if(!run.finished)await finish('abort');
       if(pending)throw new Error('Previous score is waiting for upload.');
-      run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:false,model:'',rules_version:RULES_VERSION,start_version:1,challenge:selectedChallenge,challenge_version:1});pulseCount=0;lastStatus='';win.dockFlightReady=true;}
+      run=run.id==='practice'?{id:'practice',start_position:eventStart(crypto.randomUUID()),challenge:selectedChallenge,challenge_seed:crypto.randomUUID()}:await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:false,model:'',rules_version:RULES_VERSION,start_version:1,challenge:selectedChallenge,challenge_version:1});pulseCount=0;lastStatus='';win.dockFlightReady=true;}
     const result=await original(name,name==='reset'?{...options,start_position:run?.start_position,challenge:run?.challenge||'standard',challenge_seed:run?.challenge_seed}:options);
     if(name==='reset' && result.ok && local){
-      await original(track==='agent'?'pause':'resume',{});
+      await original(track==='agent'&&run?.id!=='practice'?'pause':'resume',{});
       panel.classList.add('in-flight');panel.querySelectorAll('details').forEach(e=>e.open=false);
       $('practice').hidden=true;$('flight-abort').hidden=false;($<HTMLSelectElement>('challenge-select')).disabled=true;
       ($<HTMLButtonElement>('flight-launch')).disabled=true;

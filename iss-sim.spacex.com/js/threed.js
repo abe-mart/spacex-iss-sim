@@ -1332,14 +1332,16 @@ function physicsStep() {
         simStepCount++;
 }
 function advancePhysics() {
+    var speed = window.dockSimulationSpeed ? window.dockSimulationSpeed() : 1;
+    if ([1, 2, 4, 8].indexOf(speed) < 0) speed = 1;
     var t = performance.now();
-    null === physicsLastTime && (physicsLastTime = t), (physicsAccumulatorMs += Math.min(t - physicsLastTime, 250)), (physicsLastTime = t);
+    null === physicsLastTime && (physicsLastTime = t), (physicsAccumulatorMs += Math.min(t - physicsLastTime, 250) * speed), (physicsLastTime = t);
     var e = 0;
     if (simPaused) {
         for (physicsAccumulatorMs = 0; simStepBudget > 0 && e < simStepsPerFrameWhenStepping; ) physicsStep(), simStepBudget--, e++;
     } else {
-        for (; physicsAccumulatorMs >= physicsStepMs && e < physicsMaxStepsPerFrame; ) physicsStep(), (physicsAccumulatorMs -= physicsStepMs), e++;
-        e >= physicsMaxStepsPerFrame && (physicsAccumulatorMs = 0);
+        for (; physicsAccumulatorMs >= physicsStepMs && e < physicsMaxStepsPerFrame * speed; ) physicsStep(), (physicsAccumulatorMs -= physicsStepMs), e++;
+        e >= physicsMaxStepsPerFrame * speed && (physicsAccumulatorMs = 0);
     }
 }
 function animate() {

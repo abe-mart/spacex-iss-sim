@@ -40,7 +40,7 @@ class Dragon:
         client = cls(bridge.url, token=bridge.token)
         client._event_bridge = bridge
         print("Flight deck: " + bridge.page_url)
-        print("Join the event and click LAUNCH FLIGHT in the browser.")
+        print("Choose Fly unranked practice to test, or LAUNCH FLIGHT for a ranked attempt.")
         if wait:
             try:
                 bridge.wait_ready()

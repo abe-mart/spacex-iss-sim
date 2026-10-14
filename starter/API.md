@@ -29,7 +29,7 @@ with Dragon.start_event("https://dock-the-capsule.netlify.app", track="autopilot
 ```
 
 This small example illustrates the API; it is not a complete docking controller.
-See `examples/autopilot.py` for the reference feedback controller.
+See `examples/autopilot.py` for a controls/sensors tour, not a docking controller.
 
 **Autopilot runs in real time.** The capsule keeps moving between requests.
 Pause/step commands and `--slow` are rejected in the event Autopilot track.
@@ -234,3 +234,8 @@ Ranked flights receive the same randomized starting position for the current eve
 ## Challenge Mode
 
 Optional Challenge Mode is available in the local Autopilot and AI Agent flight panel before launch. Choose Standard docking to return to the normal leaderboard. Missions are Noisy Instruments (position ±0.5 m/axis, velocity ±0.03 m/s/axis), Broken Thruster (`translate_left` disabled), and Scrambled Controls (a seeded permutation of translation commands; rotation unchanged). Noise is deterministic per simulation step; polling while paused does not produce fresh noise. Telemetry includes `challenge`. Docking and submitted results use true physical state, not noisy measurements. Resets retain the selected scenario for that run. Each mission has separate standings and a shared event seed. The visual simulator HUD remains available; this is a controller challenge, not a tamper-proof competition.
+
+
+## Faster practice
+
+Open Practice & testing speed in the flight panel and choose 1×, 2×, 4×, or 8×, then click Fly unranked practice. Ranked flights always use 1×. Faster practice runs more fixed 60 Hz physics steps per wall-clock second; time_s remains simulation time. Actual throughput depends on the laptop and the tab must stay visible. AI Agent practice starts resumed; pause/step still works, and speed does not scale requested step durations. Telemetry includes practice (boolean) and simulation_speed (number). The example waits against time_s so it works at accelerated speeds. Practice resets remain unranked and preserve the selected speed.

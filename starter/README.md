@@ -13,9 +13,11 @@ python autopilot.py --event https://dock-the-capsule.netlify.app
 ```
 
 Use `py` on Windows or `python3` on macOS if that is your Python command. The
-helper opens the simulator. Choose a callsign, enter the event code, and click
-LAUNCH FLIGHT. The reference controller then flies. Edit `examples/autopilot.py`
+helper opens the simulator. For the controls tour, click
+Fly unranked practice. The example reads sensors and exercises a few controls without docking. Edit `examples/autopilot.py`
 with your AI coding assistant to make your own algorithm.
+
+For faster testing, open Practice & testing speed in the flight panel, choose 2×, 4×, or 8×, then click Fly unranked practice. Ranked flights always use 1×. Use telemetry time_s instead of wall time for controller timing. The tour uses simulation-time waits and keeps the helper open after it finishes.
 
 Keep the simulator tab visible. The autopilot flies in real time: the capsule keeps moving
 between control updates. Pause/step is reserved for the AI Agent track. Stop the Python process to stop the helper.
@@ -41,3 +43,4 @@ For automatic event startup use `Dragon.start_event(event_url, track="autopilot"
 ## Full API reference
 
 Open `API.md` in this folder for every Python method, HTTP endpoint, command option, telemetry field, coordinate/sign convention, and error code. Autopilot is real time; pause/step is AI Agent only.
+

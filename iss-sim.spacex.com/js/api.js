@@ -73,6 +73,8 @@
             message: ended ? outcomeMessage : "",
             paused: simPaused,
             time_s: round((ended ? outcomeStep : simStepCount) / PHYSICS_HZ, 3), // sim seconds since this attempt began (frozen once it ends)
+            practice: window.dockIsPractice ? window.dockIsPractice() : false,
+            simulation_speed: window.dockSimulationSpeed ? window.dockSimulationSpeed() : 1,
         };
         if (!isWarpComplete) return s;
 

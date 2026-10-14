@@ -29,7 +29,8 @@ async function pack(directory,prefix) {
 }
 await cp(join(root,'starter','AGENT_GUIDE.md'),join(dist,'assets','agent-briefing.txt'));
 await pack(dist,'dock-the-capsule/site/');
-for(const name of ['dragon.py','server.py','event_bridge.py','examples/autopilot.py','examples/__init__.py'])zip['dock-the-capsule/'+name]=new Uint8Array(await readFile(join(root,name)));
+for(const name of ['dragon.py','server.py','event_bridge.py','examples/__init__.py'])zip['dock-the-capsule/'+name]=new Uint8Array(await readFile(join(root,name)));
+zip['dock-the-capsule/examples/autopilot.py']=new Uint8Array(await readFile(join(root,'starter','controls_demo.py')));
 for(const name of ['autopilot.py','agent_bridge.py','retry_scores.py','README.md','AGENT_GUIDE.md','API.md'])zip['dock-the-capsule/'+name]=new Uint8Array(await readFile(join(root,'starter',name)));
 zip['dock-the-capsule/VERSION']=strToU8('dock-v1\n');
 await mkdir(join(dist,'downloads'),{recursive:true});

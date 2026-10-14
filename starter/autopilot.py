@@ -1,4 +1,4 @@
-"""Run the reference controller; edit examples/autopilot.py to build your own."""
+"""Run the controls/sensors tour; build your controller in examples/autopilot.py."""
 import sys
 from pathlib import Path
 
