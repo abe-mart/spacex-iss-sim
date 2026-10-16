@@ -40,8 +40,7 @@ async function load() {
 $('staff-login').addEventListener('submit',async e=>{e.preventDefault(); const login=e.target as HTMLFormElement; const input=login.elements.namedItem('password') as HTMLInputElement;
   try{await api('/api/admin/login','POST',{password:input.value});input.value='';await load();status('Staff session active.');}catch(err){input.value='';status(displayError(err));}});
 form.addEventListener('submit',async e=>{e.preventDefault();const payload:any={event_name:field('event_name').value,join_url:field('join_url').value,event_open:field('event_open').checked,leaderboard_public:field('leaderboard_public').checked,enabled_tracks:TRACKS.filter(t=>field(t).checked)};
-  if(field('clear_code').checked)payload.event_code='';else if(field('event_code').value)payload.event_code=field('event_code').value;
-  try{await api('/api/admin/settings','PATCH',payload);field('event_code').value='';field('clear_code').checked=false;status('Event settings saved.');}catch(err){status(displayError(err));}});
+  try{await api('/api/admin/settings','PATCH',payload);status('Event settings saved.');}catch(err){status(displayError(err));}});
 for(const id of ['run-search','track-filter','outcome-filter'])$(id).addEventListener('input',renderRuns);
 $('refresh-admin').onclick=()=>load().then(()=>status('Records refreshed.')).catch(e=>status(displayError(e)));
 $('logout-admin').onclick=async()=>{await api('/api/logout','POST'); location.reload();};

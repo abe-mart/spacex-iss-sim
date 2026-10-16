@@ -24,7 +24,7 @@ function demoData(): BoardData {
     id:`demo-${track}-${i}`,callsign:name,track,assisted:track==='manual' && i%2===0,model:'',
     time_s:74.3+j*19.4+i*23.7+(i%3)*.6,pulses:120+j*25+i*17,created_at:Date.now(),
   }))])) as BoardData['boards'];
-  return {event_code:'CAPSULE',event_name:'HACKATHON FLIGHT LAB',join_url:location.origin,rules_version:RULES_VERSION,boards,
+  return {event_name:'HACKATHON FLIGHT LAB',join_url:location.origin,rules_version:RULES_VERSION,boards,
     stats:{attempts:147,dockings:38,crews:15},updated_at:Date.now()};
 }
 function detail(score: Score) {
@@ -63,7 +63,6 @@ function render(data: BoardData) {
   $('event-name').textContent=data.event_name.toUpperCase();
   let join=data.join_url || location.origin; try { const u=new URL(join); join=u.host+(u.pathname==='/'?'':u.pathname); } catch {}
   $('join-address').textContent=join;
-  $('event-code').textContent=data.event_code || 'OPEN ENTRY';
   for(const track of TRACKS) renderTrack(track,data.boards[track] || []);
   for(const key of ['dockings','attempts','crews'] as const) $(key).textContent=String(data.stats[key]).padStart(2,'0');
   previous=data;

@@ -11,7 +11,7 @@ export default async (request: Request, context: Context) => {
     // The Netlify project stores the key as ANTHROPIC_KEY; ANTHROPIC_API_KEY is the SDK's conventional name.
     const anthropicKey=Netlify.env.get('ANTHROPIC_API_KEY') || Netlify.env.get('ANTHROPIC_KEY');
     app=createApp(new NeonStore(databaseUrl),{
-      adminPasswordHash:Netlify.env.get('ADMIN_PASSWORD_HASH'),eventCode:Netlify.env.get('EVENT_CODE'),
+      adminPasswordHash:Netlify.env.get('ADMIN_PASSWORD_HASH'),
       siteUrl:Netlify.env.get('SITE_URL') || context.site.url,
       sitePasswordHash:Netlify.env.get('SITE_PASSWORD_HASH'),
       capcom:anthropicKey?anthropicCapcom(anthropicKey):undefined,

@@ -34,7 +34,7 @@ panel.innerHTML=`<a class="flight-brand" id="event-home" href="/">◈ DOCK THE C
 ${local?`<span class="local-badge">● LOCAL SIMULATOR SERVER CONNECTED</span><label>AUTOPILOT URL<input id="autopilot-url" readonly value="${location.origin}/ap/${bridgeToken}"></label>`:''}
 ${local&&track==='agent'?'<div class="agent-connect"><button id="copy-agent-brief" disabled>Copy agent briefing ↗</button><details class="flight-help"><summary>View connection briefing</summary><textarea id="agent-brief" rows="5" readonly aria-label="Agent connection briefing"></textarea></details><p id="agent-copy-status" role="status">Launch the flight, then paste the briefing into your local agent.</p></div>':''}
 ${track==='manual'?'<details class="flight-help"><summary>How to dock</summary><ol><li>Use the arrow keys to bring pitch and yaw to zero. The comma and period keys adjust roll.</li><li>Use W/S and A/D to center the station. E moves forward and Q brakes.</li><li>Make small taps, and slow down before you reach the port.</li></ol><p>The on-screen buttons work as well. You can fly as many times as you like; your best time is ranked.</p></details>':''}
-<label>CREW NAME / CALLSIGN<input id="flight-callsign" maxlength="24" minlength="2" placeholder="Your crew name" autocomplete="nickname"></label><label id="flight-code-label">EVENT CODE<input id="flight-code" maxlength="64" placeholder="Provided by event staff" autocomplete="off"></label>
+<label>CREW NAME / CALLSIGN<input id="flight-callsign" maxlength="24" minlength="2" placeholder="Your crew name" autocomplete="nickname"></label>
 <button id="flight-launch" class="launch-button">LAUNCH FLIGHT ↗</button><div class="flight-button-row"><button id="flight-abort">Stop / abort</button></div>
 <div class="flight-clock" id="flight-clock">0:00.0 <small>SIM TIME</small></div><div id="flight-status" class="flight-status" role="status">Loading flight systems…</div><button id="retry-score" class="retry-score" hidden>Retry score upload ↗</button><button id="discard-score" class="retry-score" hidden>Discard unsent result &amp; start fresh</button>
 ${!local&&track==='manual'?'<label id="capcom-label">AI CAPCOM<select id="capcom-model"><option value="">None (fly manually without AI CAPCOM)</option></select></label>':''}
@@ -44,7 +44,7 @@ document.body.append(panel);document.body.classList.add('dock-flight','dock-star
 panel.querySelector('h2 + p')?.classList.add('flight-intro');
 const setup=document.createElement('details');setup.className='crew-setup';setup.open=true;
 setup.innerHTML='<summary>Crew &amp; event</summary>';
-for(const id of ['flight-callsign','flight-code','capcom-model'])if($(id))setup.append($(id).closest('label')!);
+for(const id of ['flight-callsign','capcom-model'])if($(id))setup.append($(id).closest('label')!);
 panel.insertBefore(setup,$('flight-launch'));
 if(local&&track!=='manual'){
   const testing=document.createElement('details');testing.className='practice-settings';
@@ -113,7 +113,7 @@ async function start(){
   starting=true;($('flight-launch') as HTMLButtonElement).disabled=true;
   try{
     if(run&&!run.finished)await finish('abort');
-    if(!testFlight){const crew=($('flight-callsign') as HTMLInputElement).value.trim();const joined=await api('/api/join','POST',{callsign:crew,event_code:($('flight-code') as HTMLInputElement).value});rememberSession(joined.token,joined.callsign);
+    if(!testFlight){const crew=($('flight-callsign') as HTMLInputElement).value.trim();const joined=await api('/api/join','POST',{callsign:crew});rememberSession(joined.token,joined.callsign);
       run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:!!capcomModel(),model:capcomModel(),rules_version:RULES_VERSION,start_version:1,challenge:selectedChallenge,challenge_version:1});
     }else run={id:UNRANKED+crypto.randomUUID(),start_position:eventStart(crypto.randomUUID()),challenge:selectedChallenge,challenge_seed:crypto.randomUUID()};
     pulseCount=0;aiDisabled=false;capcomError='';lastCall=0;lastStatus='';status('The capsule is arriving. Stand by.');
@@ -173,7 +173,7 @@ async function boot(){
     if((s.status==='success'||s.status==='fail') && s.status!==lastStatus){lastStatus=s.status;void finish(s.status);}
     if(track==='manual'&&!local&&capcomModel()&&!busy&&Date.now()-lastCall>15000)void coaching();
   },250);
-  try{await requireLogin();const config=await api('/api/config');$('flight-code-label').hidden=!config.join_required;if(!config.enabled_tracks.includes(track))($('flight-launch') as HTMLButtonElement).disabled=true;
+  try{await requireLogin();const config=await api('/api/config');if(!config.enabled_tracks.includes(track))($('flight-launch') as HTMLButtonElement).disabled=true;
     const select=$<HTMLSelectElement>('capcom-model');
     if(select){if(config.capcom?.available){for(const m of config.capcom.models)select.append(new Option(m.name,m.id));select.value=config.capcom.default_model;}
       else $('capcom-label').append(text('small','AI CAPCOM is not available for this event.'));}

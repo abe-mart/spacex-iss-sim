@@ -5,7 +5,7 @@ import {MemoryStore} from '../src/server/store';
 import {RULES_VERSION,type Run,type Settings} from '../src/shared/types';
 
 const state={status:'success',time_s:85.3,range:.15,attitude:{roll:0,pitch:.1,yaw:0},velocity:{x:-.12,y:0,z:0},gravity:true};
-function fixture(){const store=new MemoryStore();const app=createApp(store,{eventCode:'DOCK',siteUrl:'https://dock.test',adminPasswordHash:passwordHash('long-staff-password')});
+function fixture(){const store=new MemoryStore();const app=createApp(store,{siteUrl:'https://dock.test',adminPasswordHash:passwordHash('long-staff-password')});
   // Flights are submitted immediately in tests; backdate launches so the flight clock stays behind real time.
   const createRun=store.createRun.bind(store);store.createRun=async run=>{run.created_at-=600000;return createRun(run);};
   let serial=0;
@@ -14,7 +14,7 @@ function fixture(){const store=new MemoryStore();const app=createApp(store,{even
     const response=await app(new Request('https://dock.test'+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)}),'test-'+serial++);
     return {response,data:await response.json()};
   }
-  async function join(name='TEST CREW'){return (await call('/api/join','POST',{callsign:name,event_code:'DOCK'})).data.token as string;}
+  async function join(name='TEST CREW'){return (await call('/api/join','POST',{callsign:name})).data.token as string;}
   async function launch(token:string,track='autopilot'){return (await call('/api/runs','POST',{track,source:'local',rules_version:RULES_VERSION,start_version:1},token)).data.id as string;}
   return {store,call,join,launch};
 }
@@ -65,8 +65,8 @@ test('challenge runs validate the track and stay out of standard standings',asyn
   assert.equal((await f.call('/api/leaderboard?challenge=broken')).data.boards.autopilot.length,0);
   assert.equal((await f.call('/api/leaderboard?challenge=unknown')).response.status,400);
 });
-test('event code, run ownership, and expired credentials are enforced',async()=>{
-  const f=fixture();assert.equal((await f.call('/api/join','POST',{callsign:'CREW',event_code:'wrong'})).response.status,401);
+test('run ownership and expired credentials are enforced',async()=>{
+  const f=fixture();
   const a=await f.join('ALPHA'), b=await f.join('BRAVO'), id=await f.launch(a);
   assert.equal((await f.call(`/api/runs/${id}/finish`,'POST',{outcome:'success',time_s:85.3,pulses:120,state},b)).response.status,404);
   const session=await f.store.session(digest(a));session!.expires_at=Date.now()-1;
@@ -97,17 +97,13 @@ test('archive/reset preserves history, isolates late uploads and rejects repeate
   assert.equal((await f.call(`/api/admin/archives/${reset.data.archive_id}`,'GET',undefined,token)).response.status,401);
 });
 
-test('TV exposes the current join code and follows staff changes without exposing staff credentials',async()=>{
-  const f=fixture();
-  assert.equal((await f.call('/api/leaderboard')).data.event_code,'DOCK');
-  assert.equal((await f.call('/api/config')).data.event_code_hash,undefined);
-  const login=await f.call('/api/admin/login','POST',{password:'long-staff-password'});
-  const cookie=login.response.headers.get('set-cookie')!.split(';')[0];
-  await f.call('/api/admin/settings','PATCH',{event_code:'NEXT'},'','https://dock.test',cookie);
-  assert.equal((await f.call('/api/leaderboard')).data.event_code,'NEXT');
-  assert.equal((await f.call('/api/join','POST',{callsign:'CREW',event_code:'DOCK'})).response.status,401);
-  await f.call('/api/admin/settings','PATCH',{event_code:''},'','https://dock.test',cookie);
-  assert.equal((await f.call('/api/leaderboard')).data.event_code,'');
+test('legacy event codes are ignored and never exposed',async()=>{
+  const f=fixture();await f.call('/api/config');
+  const settings=(await f.store.settings())!;settings.event_code_hash=digest('OLD');settings.event_code_display='OLD';await f.store.saveSettings(settings);
+  assert.equal((await f.call('/api/join','POST',{callsign:'CREW'})).response.status,200);
+  const config=(await f.call('/api/config')).data;
+  assert.equal(config.event_code_hash,undefined);assert.equal(config.event_code_display,undefined);assert.equal(config.join_required,undefined);
+  assert.equal((await f.call('/api/leaderboard')).data.event_code,undefined);
 });
 test('acknowledged score uploads are idempotent, including concurrent retries',async()=>{
   const f=fixture(), token=await f.join(), id=await f.launch(token);
@@ -138,9 +134,9 @@ test('staff session authorizes reversible exclusions; participant cannot moderat
   assert.equal((await f.call('/api/leaderboard')).data.boards.autopilot.length,1);
 });
 test('localhost result submissions use restricted CORS; foreign origins are denied',async()=>{
-  const f=fixture();const local=await f.call('/api/join','POST',{callsign:'LOCAL',event_code:'DOCK'},'','http://127.0.0.1:49500');
+  const f=fixture();const local=await f.call('/api/join','POST',{callsign:'LOCAL'},'','http://127.0.0.1:49500');
   assert.equal(local.response.status,200);assert.equal(local.response.headers.get('access-control-allow-origin'),'http://127.0.0.1:49500');assert.equal(local.response.headers.get('set-cookie'),null);
-  assert.equal((await f.call('/api/join','POST',{callsign:'EVIL',event_code:'DOCK'},'','https://untrusted.test')).response.status,403);
+  assert.equal((await f.call('/api/join','POST',{callsign:'EVIL'},'','https://untrusted.test')).response.status,403);
   assert.equal((await f.call('/api/admin/login','POST',{password:'long-staff-password'},'','http://127.0.0.1:49500')).response.status,403);
 });
 test('boards use best per callsign, pulse tiebreaks, and assisted filtering',()=>{

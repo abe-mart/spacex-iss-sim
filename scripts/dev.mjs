@@ -16,7 +16,7 @@ class FileStore extends MemoryStore {
 const local=new FileStore();try{local.data=JSON.parse(await readFile('.dock-data/event.json','utf8'));}catch{}
 const port=Number(process.env.PORT || 8888),origin=`http://127.0.0.1:${port}`;
 const store=process.env.DATABASE_URL?new NeonStore(process.env.DATABASE_URL):local;
-const app=createApp(store,{development:true,siteUrl:origin,eventCode:process.env.EVENT_CODE || '',adminPasswordHash:process.env.ADMIN_PASSWORD_HASH || passwordHash('mission-control'),
+const app=createApp(store,{development:true,siteUrl:origin,adminPasswordHash:process.env.ADMIN_PASSWORD_HASH || passwordHash('mission-control'),
   sitePasswordHash:process.env.SITE_PASSWORD_HASH || (process.env.SITE_PASSWORD?passwordHash(process.env.SITE_PASSWORD):undefined),
   capcom:process.env.ANTHROPIC_API_KEY?anthropicCapcom(process.env.ANTHROPIC_API_KEY):undefined,dailyBudgetUsd:Number(process.env.DAILY_BUDGET_USD) || undefined});
 const root=resolve('dist');const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.jpg':'image/jpeg','.png':'image/png','.glb':'model/gltf-binary','.zip':'application/zip','.ico':'image/x-icon'};

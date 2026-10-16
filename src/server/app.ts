@@ -21,7 +21,7 @@ class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 export interface Options {
-  adminPasswordHash?: string; eventCode?: string; siteUrl?: string; development?: boolean;
+  adminPasswordHash?: string; siteUrl?: string; development?: boolean;
   /** scrypt hash of the participant site password. When set, every participant route requires a login. */
   sitePasswordHash?: string;
   /** Server-side Claude access for AI CAPCOM. Disabled unless a site password is also configured (or in development). */
@@ -33,8 +33,9 @@ export function isLoopbackOrigin(origin: string) {
   catch { return false; }
 }
 function publicSettings(s: Settings, development: boolean) {
-  const {event_code_hash, ...rest}=s;
-  return {...rest, join_required: !!event_code_hash, development};
+  // Event codes were replaced by the site password; older settings rows may still carry them.
+  const {event_code_hash, event_code_display, ...rest}=s;
+  return {...rest, development};
 }
 function cleanName(value: unknown) {
   if(typeof value !== 'string') throw new ApiError(400,'Enter a callsign.');
@@ -89,7 +90,7 @@ export function makeBoards(runs: Run[], settings: Settings, assisted='all',chall
       time_s:r.time_s!,pulses:r.pulses!,created_at:r.finished_at || r.created_at,
     }));
   }
-  return {event_code:settings.event_code_display || '',event_name:settings.event_name,join_url:settings.join_url,rules_version:settings.rules_version,boards,
+  return {event_name:settings.event_name,join_url:settings.join_url,rules_version:settings.rules_version,boards,
     stats:{attempts:eligible.filter(r=>r.outcome!=='flying').length,dockings:eligible.filter(r=>r.outcome==='success').length,
       crews:new Set(eligible.map(r=>r.callsign.toLocaleLowerCase('en-US'))).size},updated_at:Date.now()};
 }
@@ -98,12 +99,8 @@ export function createApp(store: Store, options: Options={}) {
   async function settings(origin: string) {
     let s=await store.settings();
     if(!s) {
-      s={start_seed:randomUUID(),event_name:'Dock the Capsule',event_code_hash:options.eventCode?digest(options.eventCode):'',event_open:true,
+      s={start_seed:randomUUID(),event_name:'Dock the Capsule',event_open:true,
         leaderboard_public:true,join_url:options.siteUrl || origin,enabled_tracks:[...TRACKS],rules_version:RULES_VERSION};
-      await store.saveSettings(s);
-    }
-    if(s.event_code_display===undefined){
-      s.event_code_display=options.eventCode && digest(options.eventCode)===s.event_code_hash?options.eventCode:'';
       await store.saveSettings(s);
     }
     return s;
@@ -204,7 +201,6 @@ export function createApp(store: Store, options: Options={}) {
         await requireAccess();
         const b=await body();
         if(!s.event_open) throw new ApiError(409,'The event is closed.');
-        if(s.event_code_hash && !equal(digest(String(b.event_code || '')),s.event_code_hash)) throw new ApiError(401,'That event code did not match.');
         return respond(await session('participant',cleanName(b.callsign)));
       }
       if(path==='/api/admin/login' && request.method==='POST') {
@@ -276,7 +272,6 @@ export function createApp(store: Store, options: Options={}) {
         if(typeof b.event_name==='string') { next.event_name=b.event_name.trim().slice(0,60); if(!next.event_name) throw new ApiError(400,'Event name is required.'); }
         if(typeof b.event_open==='boolean') next.event_open=b.event_open;
         if(typeof b.leaderboard_public==='boolean') next.leaderboard_public=b.leaderboard_public;
-        if(typeof b.event_code==='string') { if(b.event_code.length>64) throw new ApiError(400,'Event code is too long.'); next.event_code_hash=b.event_code?digest(b.event_code):''; next.event_code_display=b.event_code; }
         if(typeof b.join_url==='string') { let u; try { u=new URL(b.join_url); } catch { throw new ApiError(400,'Enter a full join URL.'); }
           if(u.protocol!=='https:' && !isLoopbackOrigin(u.origin)) throw new ApiError(400,'Join URL must use HTTPS.'); next.join_url=u.href.slice(0,250); }
         if(Array.isArray(b.enabled_tracks)) { if(!b.enabled_tracks.length || b.enabled_tracks.some(t=>!TRACKS.includes(t as Track))) throw new ApiError(400,'Enable at least one valid track.'); next.enabled_tracks=[...new Set(b.enabled_tracks)] as Track[]; }

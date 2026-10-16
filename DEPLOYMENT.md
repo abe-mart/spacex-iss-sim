@@ -20,7 +20,6 @@ All secrets are Netlify environment variables. None are stored in Git, and none 
 | `ANTHROPIC_KEY` (or `ANTHROPIC_API_KEY`) | The event's Claude API key, used only by the Netlify Function for AI CAPCOM. The production project stores it as `ANTHROPIC_KEY`. AI CAPCOM stays disabled unless `SITE_PASSWORD_HASH` is also set. |
 | `DAILY_BUDGET_USD` | Optional daily AI CAPCOM spending limit in US dollars (default 25). |
 | `SITE_URL` | Public site address, for example `https://dock-the-capsule.netlify.app`. |
-| `EVENT_CODE` | Optional extra code required to join. Not needed when the site password is set. |
 
 ### Setting the event password and Claude API key
 

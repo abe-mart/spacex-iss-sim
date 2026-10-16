@@ -8,7 +8,8 @@ export interface Settings {
   start_seed?: string;
   event_id?: string;
   event_name: string;
-  event_code_hash: string;
+  /** Legacy event-code fields from before the site password; ignored. */
+  event_code_hash?: string;
   event_code_display?: string;
   event_open: boolean;
   leaderboard_public: boolean;
@@ -51,7 +52,6 @@ export interface Score {
   time_s: number; pulses: number; created_at: number;
 }
 export interface BoardData {
-  event_code?: string;
   event_name: string;
   join_url: string;
   rules_version: string;
