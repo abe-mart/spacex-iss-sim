@@ -24,7 +24,7 @@ export interface Options {
   adminPasswordHash?: string; siteUrl?: string; development?: boolean;
   /** scrypt hash of the participant site password. When set, every participant route requires a login. */
   sitePasswordHash?: string;
-  /** Server-side Claude access for AI CAPCOM. Disabled unless a site password is also configured (or in development). */
+  /** Server-side Claude access for AI CAPCOM. */
   capcom?: Capcom;
   dailyBudgetUsd?: number;
 }
@@ -126,7 +126,8 @@ export function createApp(store: Store, options: Options={}) {
       // Any valid session (login, crew, or staff) shows the site password was entered.
       const hasAccess=async () => !loginRequired || !!await store.session(digest(rawToken));
       const requireAccess=async () => { if(!await hasAccess()) throw new ApiError(401,'Log in with the event password first.'); };
-      const capcomEnabled=!!options.capcom && (loginRequired || !!options.development);
+      // CAPCOM is available whenever a key is configured; rate and daily spending limits bound its cost.
+      const capcomEnabled=!!options.capcom;
       const who=async (role?: string) => {
         const s=await store.session(digest(rawToken));
         // Login-only sessions cannot fly or score until the crew joins with a callsign.

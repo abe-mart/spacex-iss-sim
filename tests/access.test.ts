@@ -48,15 +48,17 @@ test('CAPCOM requires a login, accepts only listed models, and uses the server p
   assert.deepEqual(JSON.parse(f.calls[0].content),{telemetry:{range:40},recent:['CREW: hello'],crew_message:'How am I doing?'});
 });
 
-test('CAPCOM stops at the daily spend limit and stays off without a site password',async()=>{
+test('CAPCOM stops at the daily spend limit and works without a site password',async()=>{
   // One Haiku call in this fixture costs 1000×0.10 + 100×0.50 = 150 micro-dollars.
   const f=fixture({dailyBudgetUsd:0.0002}), token=await f.login();
   assert.equal((await f.call('/api/capcom','POST',{},token)).response.status,200);
   assert.equal((await f.call('/api/capcom','POST',{},token)).response.status,200);
   assert.equal((await f.call('/api/capcom','POST',{},token)).response.status,429);
   const open=fixture({sitePasswordHash:undefined});
-  assert.equal((await open.call('/api/config')).data.capcom.available,false);
-  assert.equal((await open.call('/api/capcom','POST',{})).response.status,503);
+  assert.equal((await open.call('/api/config')).data.capcom.available,true);
+  assert.equal((await open.call('/api/capcom','POST',{})).response.status,200);
+  const none=fixture({sitePasswordHash:undefined,capcom:undefined});
+  assert.equal((await none.call('/api/capcom','POST',{})).response.status,503);
 });
 
 test('a flight clock ahead of real time is not ranked on any track',async()=>{

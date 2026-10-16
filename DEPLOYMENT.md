@@ -17,7 +17,7 @@ All secrets are Netlify environment variables. None are stored in Git, and none 
 | `DATABASE_URL` | Pooled Neon connection string. |
 | `ADMIN_PASSWORD_HASH` | scrypt hash of the staff password for `/admin`. |
 | `SITE_PASSWORD_HASH` | scrypt hash of the event password that participants enter. When it is set, the site requires a login. |
-| `ANTHROPIC_KEY` (or `ANTHROPIC_API_KEY`) | The event's Claude API key, used only by the Netlify Function for AI CAPCOM. The production project stores it as `ANTHROPIC_KEY`. AI CAPCOM stays disabled unless `SITE_PASSWORD_HASH` is also set. |
+| `ANTHROPIC_KEY` (or `ANTHROPIC_API_KEY`) | The event's Claude API key, used only by the Netlify Function for AI CAPCOM. The production project stores it as `ANTHROPIC_KEY`. Without `SITE_PASSWORD_HASH`, anyone who opens the site can use AI CAPCOM, limited by the rate and daily spending limits. |
 | `DAILY_BUDGET_USD` | Optional daily AI CAPCOM spending limit in US dollars (default 25). |
 | `SITE_URL` | Public site address, for example `https://dock-the-capsule.netlify.app`. |
 
