@@ -10,7 +10,7 @@ A hackathon challenge in which participants dock a capsule with the Internationa
 
 | Level | Challenge | How it works |
 |---|---|---|
-| Beginner | Manual Piloting | The participant flies in the hosted browser simulator. AI CAPCOM (Claude Haiku by default) coaches them by radio, using the event's API key. They can choose another model or fly without AI. |
+| Beginner | AI CAPCOM | The participant flies in the hosted browser simulator. AI CAPCOM (Claude Haiku by default) coaches them by radio, using the event's API key. They can choose another model or fly without AI. |
 | Intermediate | Autopilot | The participant writes a control loop in Python, C, or C++ that requests telemetry and sends thruster inputs to a simulator server on their own computer. |
 | Advanced | AI Agent | The participant builds an AI agent that flies through the same interface. The starter kit includes an example in which Claude flies the capsule. |
 

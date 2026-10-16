@@ -2,7 +2,7 @@ export const TRACKS = ["manual", "autopilot", "agent"] as const;
 export type Track = typeof TRACKS[number];
 export const RULES_VERSION = "dock-v1";
 export const TRACK_LABELS: Record<Track, string> = {
-  manual: "Manual Piloting", autopilot: "Autopilot", agent: "AI Agent",
+  manual: "AI CAPCOM", autopilot: "Autopilot", agent: "AI Agent",
 };
 export interface Settings {
   start_seed?: string;

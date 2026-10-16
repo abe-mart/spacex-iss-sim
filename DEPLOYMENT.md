@@ -38,7 +38,7 @@ All secrets are Netlify environment variables. None are stored in Git, and none 
    netlify env:set DAILY_BUDGET_USD 25 --context production
    ```
 4. **Redeploy.** Functions read environment variables at deploy time, so trigger a new deploy (**Deploys → Trigger deploy → Deploy project**) after changing them.
-5. **Verify.** Open the site in a private window. It should ask for the event password. After logging in, open **Manual Piloting**: the AI CAPCOM menu should list the Claude models with Haiku selected, and CAPCOM should speak shortly after launch.
+5. **Verify.** Open the site in a private window. It should ask for the event password. After logging in, open **AI CAPCOM**: the model menu should list the Claude models with Haiku selected, and CAPCOM should speak shortly after launch.
 
 ### Database
 
@@ -50,8 +50,8 @@ All secrets are Netlify environment variables. None are stored in Git, and none 
 
 - Share the site address and the event password. Participants log in once per browser; sessions last eight hours.
 - Open `/admin`, sign in, and set the event name and enabled tracks.
-- Put `/leaderboard` on the TV and click fullscreen. It shows Manual Piloting, Autopilot, and AI Agent in three columns. `/leaderboard?demo=1` shows labeled sample data.
-- Beginners open Manual Piloting and fly with AI CAPCOM; no installation is needed. Autopilot and AI Agent participants download the starter kit from their setup page and run `python -m hackathon.server`.
+- Put `/leaderboard` on the TV and click fullscreen. It shows AI CAPCOM, Autopilot, and AI Agent in three columns. `/leaderboard?demo=1` shows labeled sample data.
+- Beginners open AI CAPCOM; no installation is needed. Autopilot and AI Agent participants download the starter kit from their setup page and run `python -m hackathon.server`.
 - Successful real-time flights are ranked by simulation time, then pulse count. Staff can exclude or restore results and export CSV files. Results are reported by the browser and checked for consistency; review disputed attempts.
 - If a score upload fails, participants can use **Retry score upload** or `retry_scores.py`.
 - After the event, close the event in the admin page and monitor the Netlify, Neon, and Anthropic usage dashboards.

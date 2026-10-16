@@ -30,12 +30,12 @@ const capcomModel=()=>($<HTMLSelectElement>('capcom-model'))?.value || '';
 win.dockBridgeMeta=()=>({ready:win.dockFlightReady,started:!!run,flight:run&&!run.finished?run.id:null,ranked:!!run&&!unranked(run.id),simulation_speed:win.dockSimulationSpeed(),
   result:pending?{...pending,event_url:apiOrigin(),token:sessionToken()}:null});
 const panel=document.createElement('aside');panel.className='dock-flight-panel';
-panel.innerHTML=`<a class="flight-brand" id="event-home" href="/">◈ DOCK THE CAPSULE</a><h2>${TRACK_LABELS[track]}</h2><p>${track==='manual'?'Enter a crew name and launch. AI CAPCOM coaches you by radio during the flight. Choose None below to fly without it.':track==='agent'?'Your AI agent flies this capsule in real time through the local server. Launch the flight here, then start your agent.':'Your autopilot flies this capsule through the local server. Launch the flight here, then start your autopilot.'}</p>
+panel.innerHTML=`<a class="flight-brand" id="event-home" href="/">◈ DOCK THE CAPSULE</a><h2>${TRACK_LABELS[track]}</h2><p>${track==='manual'?'Enter a crew name and launch. AI CAPCOM will talk you in by radio and tell you which keys to press. Choose None below to fly without AI.':track==='agent'?'Your AI agent flies this capsule in real time through the local server. Launch the flight here, then start your agent.':'Your autopilot flies this capsule through the local server. Launch the flight here, then start your autopilot.'}</p>
 ${local?`<span class="local-badge">● LOCAL SIMULATOR SERVER CONNECTED</span><label>AUTOPILOT URL<input id="autopilot-url" readonly value="${location.origin}/ap/${bridgeToken}"></label>`:''}
 ${local&&track==='agent'?'<div class="agent-connect"><button id="copy-agent-brief" disabled>Copy agent briefing ↗</button><details class="flight-help"><summary>View connection briefing</summary><textarea id="agent-brief" rows="5" readonly aria-label="Agent connection briefing"></textarea></details><p id="agent-copy-status" role="status">Launch the flight, then paste the briefing into your local agent.</p></div>':''}
 ${track==='manual'?'<details class="flight-help"><summary>How to dock</summary><ol><li>Use the arrow keys to bring pitch and yaw to zero. The comma and period keys adjust roll.</li><li>Use W/S and A/D to center the station. E moves forward and Q brakes.</li><li>Make small taps, and slow down before you reach the port.</li></ol><p>The on-screen buttons work as well. You can fly as many times as you like; your best time is ranked.</p></details>':''}
 <label>CREW NAME / CALLSIGN<input id="flight-callsign" maxlength="24" minlength="2" placeholder="Your crew name" autocomplete="nickname"></label>
-<button id="flight-launch" class="launch-button">LAUNCH FLIGHT ↗</button><div class="flight-button-row"><button id="flight-abort">Stop / abort</button></div>
+<button id="flight-launch" class="launch-button">LAUNCH FLIGHT ↗</button><div class="flight-button-row"><button id="flight-abort">Abort flight</button><button id="flight-menu">Main menu</button></div>
 <div class="flight-clock" id="flight-clock">0:00.0 <small>SIM TIME</small></div><div id="flight-status" class="flight-status" role="status">Loading flight systems…</div><button id="retry-score" class="retry-score" hidden>Retry score upload ↗</button><button id="discard-score" class="retry-score" hidden>Discard unsent result &amp; start fresh</button>
 ${!local&&track==='manual'?'<label id="capcom-label">AI CAPCOM<select id="capcom-model"><option value="">None (fly manually without AI CAPCOM)</option></select></label>':''}
 <div id="flight-log" class="flight-log" aria-live="polite"></div>${track==='manual'&&!local?'<form id="radio-form" class="radio-form"><input id="radio-message" maxlength="300" placeholder="Ask CAPCOM…"><button>Send</button></form>':''}
@@ -43,7 +43,7 @@ ${!local&&track==='manual'?'<label id="capcom-label">AI CAPCOM<select id="capcom
 document.body.append(panel);document.body.classList.add('dock-flight','dock-start-required');
 panel.querySelector('h2 + p')?.classList.add('flight-intro');
 const setup=document.createElement('details');setup.className='crew-setup';setup.open=true;
-setup.innerHTML='<summary>Crew &amp; event</summary>';
+setup.innerHTML='<summary>Crew</summary>';
 for(const id of ['flight-callsign','capcom-model'])if($(id))setup.append($(id).closest('label')!);
 panel.insertBefore(setup,$('flight-launch'));
 if(local&&track!=='manual'){
@@ -96,7 +96,7 @@ function allowedState(s:any){return {status:s.status,time_s:s.time_s,range:s.ran
 async function savePending(){if(!pending)return;try{await api(`/api/runs/${pending.id}/finish`,'POST',pending.body);pending=null;$('retry-score').hidden=true;$('discard-score').hidden=true;try{sessionStorage.removeItem('dock.pending-score');}catch{}status('Flight recorded. Check the live standings.','success');}catch(e){$('retry-score').hidden=false;$('discard-score').hidden=false;const permanent=[400,401,404,409].includes((e as any)?.status);status(permanent?`This result cannot be uploaded: ${displayError(e)} Discard it below to start fresh.`:`Score saved in this tab. ${displayError(e)} Retry when connected.`,'error');}}
 async function finish(outcome:'success'|'fail'|'abort',s=win.dragon?.getFlightState()||state()){
   win.dockFlightReady=false;if(!run||run.finished)return;run.finished=true;
-  panel.classList.remove('in-flight');($<HTMLButtonElement>('flight-launch')).disabled=false;$('flight-launch').textContent='LAUNCH ANOTHER FLIGHT ↗';$('flight-abort').hidden=true;
+  panel.classList.remove('in-flight');if($('radio-form'))$('radio-form').hidden=true;($<HTMLButtonElement>('flight-launch')).disabled=false;$('flight-launch').textContent='LAUNCH ANOTHER FLIGHT ↗';$('flight-abort').hidden=true;
   if(local&&track!=='manual')($<HTMLSelectElement>('challenge-select')).disabled=false;
   const body={outcome,time_s:Number(s.time_s)||0,pulses:pulseCount,message:String(s.message || '').slice(0,200),state:allowedState(s)};
   log(outcome==='success'?'DOCKED':'FLIGHT ENDED',`${flightTime(body.time_s)} simulation seconds · ${pulseCount} pulses`);
@@ -104,7 +104,24 @@ async function finish(outcome:'success'|'fail'|'abort',s=win.dragon?.getFlightSt
   pending={id:run.id,body};try{sessionStorage.setItem('dock.pending-score',JSON.stringify(pending));}catch{}
   await savePending();($('flight-callsign') as HTMLInputElement).disabled=false;
 }
-async function abort(){aiDisabled=true;await cmd('pause');await finish('abort');status('Flight aborted. Launch again when ready.');}
+function setEndScreen(title:string,message=''){const heading=document.querySelector('#fail h2');if(heading)heading.textContent=title;const text=document.getElementById('fail-message');if(text)text.textContent=message;}
+// Ends the current flight the way the simulator ends any attempt, so the scene and HUD stop together.
+async function endFlight(){
+  aiDisabled=true;await finish('abort');
+  if(!win.isGameOver&&win.hideInterface){setEndScreen('ABORTED','The flight was aborted.');win.hideInterface('fail');}
+}
+async function abort(){
+  if(!run||run.finished)return;
+  if(!confirm('Abort this flight? It will be recorded as an aborted attempt.'))return;
+  await endFlight();status('Flight aborted. Launch again when ready.');
+}
+async function mainMenu(event?:Event){
+  event?.preventDefault();
+  const flying=!!run&&!run.finished;
+  if(!confirm(flying?'End this flight and return to the main menu? The flight will be recorded as an aborted attempt.':'Return to the main menu?'))return;
+  if(flying)await endFlight().catch(()=>{});
+  location.href=apiOrigin()+'/';
+}
 async function start(){
   const testFlight=local&&simSpeed>1;
   if(starting)return;if(pending&&!testFlight){$('retry-score').hidden=false;$('discard-score').hidden=false;status('An earlier result is waiting. Retry its upload, or discard it below to start fresh.','error');return;}
@@ -116,7 +133,7 @@ async function start(){
     if(!testFlight){const crew=($('flight-callsign') as HTMLInputElement).value.trim();const joined=await api('/api/join','POST',{callsign:crew});rememberSession(joined.token,joined.callsign);
       run=await api('/api/runs','POST',{track,source:local?'local':'hosted',assisted:!!capcomModel(),model:capcomModel(),rules_version:RULES_VERSION,start_version:1,challenge:selectedChallenge,challenge_version:1});
     }else run={id:UNRANKED+crypto.randomUUID(),start_position:eventStart(crypto.randomUUID()),challenge:selectedChallenge,challenge_seed:crypto.randomUUID()};
-    pulseCount=0;aiDisabled=false;capcomError='';lastCall=0;lastStatus='';status('The capsule is arriving. Stand by.');
+    setEndScreen('FAIL');pulseCount=0;aiDisabled=false;capcomError='';lastCall=0;lastStatus='';status('The capsule is arriving. Stand by.');
     await cmd('reset');await cmd('gravity_on');await cmd('translation_fine');await cmd('rotation_fine');
     await cmd('resume');
     win.dockFlightReady=true;document.body.classList.remove('dock-start-required');($('flight-callsign') as HTMLInputElement).disabled=true;
@@ -141,6 +158,7 @@ if(!local&&track==='manual'){
   $('radio-form')?.addEventListener('submit',e=>{e.preventDefault();const input=$('radio-message') as HTMLInputElement;const message=input.value.trim();input.value='';if(message){log('CREW',message);void coaching(message);}});
 }
 $('flight-launch').onclick=()=>void start();$('flight-abort').onclick=()=>void abort().catch(e=>status(displayError(e),'error'));
+$('flight-menu').onclick=e=>void mainMenu(e);$('event-home').onclick=e=>void mainMenu(e);
 $('retry-score').onclick=()=>void savePending();
 $('discard-score').onclick=()=>{pending=null;try{sessionStorage.removeItem('dock.pending-score');}catch{}$('retry-score').hidden=true;$('discard-score').hidden=true;status('Unsent result discarded. You can launch a new flight.');};
 try{const stored=sessionStorage.getItem('dock.pending-score');if(stored){const candidate=JSON.parse(stored);if(unranked(candidate?.id)||candidate?.id==='practice'||!candidate?.id||!candidate?.body){sessionStorage.removeItem('dock.pending-score');}else{pending=candidate;$('retry-score').hidden=false;$('discard-score').hidden=false;}}}catch{}
