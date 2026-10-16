@@ -1,8 +1,14 @@
 import {$,api,flightTime,text} from './client';
 import {TRACKS,TRACK_LABELS,RULES_VERSION,type BoardData,type Score,type Track} from '../shared/types';
 import {CHALLENGES,type Challenge} from '../shared/challenges';
+import {listenForTvPassword} from './tv-password';
 
 const demo=new URLSearchParams(location.search).get('demo')==='1';
+// Passwords arrive directly from the controlling admin tab, never shared API data or storage.
+listenForTvPassword(password=>{
+  $('tv-password-value').textContent=password;
+  $('tv-password-callout').hidden=!password;
+});
 const requested=new URLSearchParams(location.search).get('challenge')||'standard';
 let challenge:Challenge=Object.hasOwn(CHALLENGES,requested)?requested as Challenge:'standard';
 const cacheKey='dock.tv.last.'+challenge;

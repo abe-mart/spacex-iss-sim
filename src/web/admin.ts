@@ -4,6 +4,52 @@ let runs: Run[]=[], eventId='legacy';
 const form=$('event-settings') as HTMLFormElement;
 function field(name: string) { return form.elements.namedItem(name) as HTMLInputElement; }
 function status(message: string) { $('admin-status').textContent=message; }
+const tvPasswordForm=$<HTMLFormElement>('tv-password-form');
+const tvPasswordInput=$<HTMLInputElement>('tv-password-input');
+let tvWindow: Window | null=null, tvReady=false, pendingTvPassword='', tvOperation=0;
+function tvStatus(message: string) { $('tv-password-status').textContent=message; }
+function openTv() {
+  if(!tvWindow || tvWindow.closed) {
+    tvReady=false;
+    // Keep an opener reference for the private, same-origin password handoff.
+    tvWindow=window.open('/leaderboard','dock-event-tv');
+  }
+  if(!tvWindow)throw new Error('Allow pop-ups for this site, then open the TV display again.');
+  tvWindow.focus();
+}
+function sendTvPassword() {
+  if(!tvReady || !tvWindow || tvWindow.closed)return;
+  tvWindow.postMessage({type:'dock.tv.password',password:pendingTvPassword},location.origin);
+  const shown=!!pendingTvPassword; pendingTvPassword='';
+  tvStatus(shown?'Password sent to the TV display.':'Password hidden on the TV display.');
+}
+function hideTvPassword() {
+  tvOperation++;pendingTvPassword='';tvPasswordForm.reset();
+  // Also clear a display that is navigating or has not completed its handshake.
+  if(tvWindow && !tvWindow.closed)tvWindow.postMessage({type:'dock.tv.password',password:''},location.origin);
+}
+window.addEventListener('message',event=>{
+  if(event.source!==tvWindow || event.origin!==location.origin)return;
+  if(event.data?.type==='dock.tv.ready'){tvReady=true;sendTvPassword();}
+  if(event.data?.type==='dock.tv.not-ready')tvReady=false;
+});
+$('open-tv-display').addEventListener('click',event=>{
+  event.preventDefault();try{openTv();}catch(error){status(displayError(error));}
+});
+tvPasswordForm.addEventListener('submit',async event=>{
+  event.preventDefault();const operation=++tvOperation, password=tvPasswordInput.value;
+  tvPasswordForm.reset();pendingTvPassword='';
+  try {
+    // Open during the click gesture, then recheck staff access before sending anything.
+    openTv();await api('/api/admin');
+    if(operation!==tvOperation)return;
+    pendingTvPassword=password;tvStatus('Waiting for the TV display…');sendTvPassword();
+  } catch(error) {
+    if(operation!==tvOperation)return;
+    hideTvPassword();tvStatus(displayError(error));
+  }
+});
+$('hide-tv-password').addEventListener('click',()=>{hideTvPassword();tvStatus('Password hidden on the TV display.');});
 function renderRuns() {
   const search=($('run-search') as HTMLInputElement).value.toLowerCase();
   const track=($('track-filter') as HTMLSelectElement).value, outcome=($('outcome-filter') as HTMLSelectElement).value;
@@ -43,7 +89,7 @@ form.addEventListener('submit',async e=>{e.preventDefault();const payload:any={e
   try{await api('/api/admin/settings','PATCH',payload);status('Event settings saved.');}catch(err){status(displayError(err));}});
 for(const id of ['run-search','track-filter','outcome-filter'])$(id).addEventListener('input',renderRuns);
 $('refresh-admin').onclick=()=>load().then(()=>status('Records refreshed.')).catch(e=>status(displayError(e)));
-$('logout-admin').onclick=async()=>{await api('/api/logout','POST'); location.reload();};
+$('logout-admin').onclick=async()=>{hideTvPassword();await api('/api/logout','POST'); location.reload();};
 function exportRuns(records:Run[],filename:string){
   const keys=['id','callsign','track','challenge','outcome','time_s','pulses','assisted','model','source','excluded','exclusion_reason','message','rules_version','created_at','finished_at'] as const;
   const escape=(v:unknown)=>{let s=String(v??'');if(/^[=+@\-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
