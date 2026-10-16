@@ -65,10 +65,6 @@ if(local&&track!=='manual'){
 }
 $('flight-abort').hidden=true;
 if($('radio-form'))$('radio-form').hidden=true;
-// One expanded setup section at a time keeps laptop panels compact.
-panel.querySelectorAll('details').forEach(detail=>detail.addEventListener('toggle',()=>{
-  if(detail.open)panel.querySelectorAll('details').forEach(other=>{if(other!==detail)other.open=false;});
-}));
 if(local)$('autopilot-url').onfocus=e=>(e.target as HTMLInputElement).select();
 if(local&&track==='agent') {
   const field=$<HTMLTextAreaElement>('agent-brief'), note=$('agent-copy-status');
