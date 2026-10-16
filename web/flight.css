@@ -16,7 +16,7 @@ html.hk body.dock-flight{right:360px}html.hk #rotation-controls,html.hk #transla
 /* HUD overlays on the AI CAPCOM track: CAPCOM transmissions left of the reticle, keyboard reference on the right. */
 .capcom-hud,.keys-hud{position:absolute;z-index:2;box-sizing:border-box;color:#eaf4fb;font-family:Lato,'Segoe UI',Arial,sans-serif;background:rgba(6,14,22,.74);border:1px solid rgba(103,228,212,.32);border-radius:8px;backdrop-filter:blur(6px);pointer-events:none}
 .capcom-hud[hidden],.keys-hud[hidden]{display:none}
-.capcom-hud{right:calc(50% + 120px);bottom:calc(50% + 70px);width:min(360px,calc(50% - 150px));max-height:calc(50% - 150px);overflow:hidden;padding:12px 16px 14px;border-left:3px solid #67e4d4;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+.capcom-hud{right:calc(50% + 220px);bottom:calc(50% + 90px);width:clamp(220px,calc(50% - 250px),320px);max-height:calc(50% - 170px);overflow:hidden;padding:12px 16px 14px;border-left:3px solid #67e4d4;box-shadow:0 8px 30px rgba(0,0,0,.45)}
 .capcom-hud header{display:flex;align-items:center;gap:8px;font:700 11px/1 Lato,Arial,sans-serif;letter-spacing:.16em;color:#67e4d4;margin-bottom:8px}
 .capcom-hud time{margin-left:auto;font:11px Consolas,monospace;letter-spacing:0;color:#7f9bb0}
 .capcom-dot{width:8px;height:8px;border-radius:50%;background:#67e4d4;box-shadow:0 0 8px #67e4d4}
@@ -45,4 +45,5 @@ html.hk body.dock-flight{right:360px}html.hk #rotation-controls,html.hk #transla
 @media(min-height:1000px){.keys-hud{top:200px;width:180px}.keys-body{display:block}.keys-hud li{height:21px}}
 .keys-hud kbd{min-width:22px;height:18px;padding:0 5px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;border:1px solid #5b7487;border-bottom-width:2px;border-radius:4px;background:#13212e;color:#fff;font:700 12px/1 'Segoe UI',Arial,sans-serif}
 .keys-hud p{margin:7px 0 0;font-size:10px;color:#7f9bb0}
+@media(max-height:780px){.capcom-hud{max-height:calc(50% - 150px);padding:10px 14px}.capcom-hud header{margin-bottom:6px}.capcom-text{font-size:14px;line-height:1.35}.capcom-prev{display:none}}
 @media(max-width:650px){.capcom-hud{right:auto;left:12px;bottom:auto;top:70px;width:calc(100% - 24px)}.keys-hud{display:none}}
