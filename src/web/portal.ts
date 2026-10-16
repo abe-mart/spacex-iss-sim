@@ -1,6 +1,8 @@
 import {api} from './client';
+import {requireLogin} from './gate';
+void requireLogin();
 api('/api/config').then(config=>{
   if(!config.event_open) {
-    const e=document.querySelector('.eyebrow'); if(e) e.textContent='EVENT CLOSED / PRACTICE STILL AVAILABLE';
+    const e=document.querySelector('.eyebrow'); if(e) e.textContent='THE EVENT IS CLOSED';
   }
-}).catch(()=>{ /* Static manual practice still works without event storage. */ });
+}).catch(()=>{ /* The page remains readable without event storage. */ });

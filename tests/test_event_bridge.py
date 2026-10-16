@@ -9,7 +9,16 @@ from unittest.mock import patch
 import urllib.request
 import urllib.error
 
+import sys
+
 from event_bridge import EventBridge
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'starter'))
+import hackathon.client as hackathon_client  # noqa: E402
+
+FLYING = {'status': 'flying', 'time_s': 1.0, 'position': {'x': 150.0, 'y': 2.0, 'z': -1.0}, 'velocity': {'x': -0.5, 'y': 0.0, 'z': 0.1},
+          'attitude': {'roll': 1.0, 'pitch': -2.0, 'yaw': 3.0}, 'rotation_rate': {'roll': 0.1, 'pitch': 0.2, 'yaw': 0.3},
+          'rotation_rate_commanded': {'roll': 0.0, 'pitch': 0.3, 'yaw': 0.3}, 'simulation_speed': 1}
 
 
 class BridgeTests(unittest.TestCase):
@@ -97,20 +106,66 @@ class BridgeTests(unittest.TestCase):
             self.assertNotEqual(second.token,self.helper.token)
         self.assertTrue(second.closed)
 
-    def test_only_agent_track_accepts_pause_and_step(self):
-        for command in ({'command':'pause'}, {'command':'step','seconds':.5}):
-            with self.assertRaises(urllib.error.HTTPError) as error:
-                self.request('/api/command',command)
-            self.assertEqual(error.exception.code,400)
-            self.assertIn('real time',error.exception.read().decode())
-        self.helper.close()
-        self.helper=EventBridge('https://dock.test',track='agent',open_browser=False,site_dir=self.helper.site_dir)
-        for command in ({'command':'pause'}, {'command':'step','seconds':.5}):
-            with self.assertRaises(urllib.error.HTTPError) as error:
-                self.request('/api/command',command)
-            # Valid for this track, but a participant has not launched yet.
-            self.assertEqual(error.exception.code,409)
+    def test_no_track_accepts_pause_or_step(self):
+        for track in ('autopilot', 'agent'):
+            self.helper.close()
+            self.helper = EventBridge('https://dock.test', track=track, open_browser=False, site_dir=self.helper.site_dir)
+            for command in ({'command': 'pause'}, {'command': 'step', 'seconds': .5}):
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    self.request('/api/command', command)
+                self.assertEqual(error.exception.code, 400)
+                self.assertIn('real time', error.exception.read().decode())
 
+    def sync(self, state, flight='f1', results=(), ready=True):
+        meta = {'started': True, 'ready': ready, 'flight': flight, 'ranked': True}
+        return self.request('/bridge/sync', {'state': state, 'results': list(results), 'meta': meta})['commands']
+
+    def test_autopilot_url_requires_the_server_token(self):
+        bad = hackathon_client.connect(self.helper.url + '/ap/' + '0' * 64)
+        with self.assertRaises(hackathon_client.HackathonError):
+            bad.request_telemetry()
+        with self.assertRaises(ValueError):
+            hackathon_client.connect('https://example.com/not-an-autopilot-url')
+
+    def test_autopilot_reads_state_vector_and_fires_pulses(self):
+        connection = hackathon_client.connect(self.helper.autopilot_url)
+        self.assertEqual(connection.request_telemetry()['status'], 'offline')
+        self.sync(FLYING)
+        data = connection.request_telemetry()
+        self.assertEqual((data['status'], data['flight_id'], data['timestamp_ms'], data['ranked']), ('flying', 'f1', 1000, True))
+        self.assertEqual(data['state'], [150.0, 2.0, -1.0, -0.5, 0.0, 0.1, 1.0, -2.0, 3.0, 0.1, 0.2, 0.3])
+        self.assertEqual(data['commanded_rates'], [0.0, 0.3, 0.3])
+
+        reply = []
+        worker = threading.Thread(target=lambda: reply.append(connection.send_control_inputs([1.4, -2.6, 0, 0, 0, 3])))
+        worker.start()
+        for _ in range(50):
+            commands = self.sync(FLYING)
+            if commands:
+                break
+            time.sleep(.02)
+        self.assertEqual([(c['command'], c['count']) for c in commands], [('translate_backward', 1), ('translate_left', 3), ('yaw_left', 3)])
+        applied = dict(FLYING, time_s=2.0)
+        self.sync(applied, results=[{'id': c['id'], 'ok': True, 'state': applied} for c in commands])
+        worker.join(2)
+        self.assertEqual(reply[0], {'ok': True, 'timestamp_ms': 2000, 'pulses': [1, -3, 0, 0, 0, 3]})
+
+        # Telemetry from before the inputs took effect is held back; newer telemetry is served.
+        self.sync(dict(FLYING, time_s=1.5))
+        self.assertEqual(connection.request_telemetry()['timestamp_ms'], 1000)
+        self.sync(dict(FLYING, time_s=2.1))
+        self.assertEqual(connection.request_telemetry()['timestamp_ms'], 2100)
+
+    def test_finished_flight_is_reported_only_to_the_client_that_flew_it(self):
+        pilot = hackathon_client.connect(self.helper.autopilot_url)
+        self.sync(FLYING)
+        self.assertEqual(pilot.request_telemetry()['status'], 'flying')
+        self.sync(dict(FLYING, status='success', time_s=80.0, message='Docked.'), flight=None, ready=False)
+        data = pilot.request_telemetry()
+        self.assertEqual((data['status'], data['docked'], data['flight_id'], data['message']), ('docked', True, 'f1', 'Docked.'))
+        newcomer = hackathon_client.connect(self.helper.autopilot_url)
+        self.assertEqual(newcomer.request_telemetry()['status'], 'waiting')
+        self.assertFalse(pilot.send_control_inputs([1, 0, 0, 0, 0, 0])['ok'])
 
 if __name__ == '__main__':
     unittest.main()

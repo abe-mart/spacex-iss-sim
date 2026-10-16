@@ -1,46 +1,36 @@
-# Dock the Capsule — Python starter
+# Dock the Capsule: starter kit
 
-Use Python 3.11+ and Chrome on Windows/macOS (Edge is another Windows target).
-No pip packages or separate server command are needed. Unzip the full bundle;
-keep its `site/`, `examples/`, and Python files together.
+This kit is for the Autopilot (intermediate) and AI Agent (advanced) challenges. It needs Python 3.9 or newer and Chrome or Edge on the same computer. No additional packages are required, except the Anthropic SDK for the example agent. Keep all of the unzipped files together.
 
-## Autopilot
+## 1. Start the simulator server
 
-From this folder run:
+Open a terminal in this folder and run:
 
 ```
-python autopilot.py --event https://dock-the-capsule.netlify.app
+python -m hackathon.server                  # Autopilot challenge
+python -m hackathon.server --track agent    # AI Agent challenge
 ```
 
-Use `py` on Windows or `python3` on macOS if that is your Python command. The
-helper opens the simulator. For the controls tour, click
-Fly unranked practice. The example reads sensors and exercises a few controls without docking. Edit `examples/autopilot.py`
-with your AI coding assistant to make your own algorithm.
+Use `py` on Windows or `python3` on macOS if `python` is not found. The server opens the simulator in your browser and prints your autopilot URL. Log in, enter a crew name, and press **LAUNCH FLIGHT**. Leave the server running while you work; press Ctrl+C to stop it.
 
-For faster testing, open Practice & testing speed in the flight panel, choose 2×, 4×, or 8×, then click Fly unranked practice. Ranked flights always use 1×. Use telemetry time_s instead of wall time for controller timing. The tour uses simulation-time waits and keeps the helper open after it finishes.
+## 2. Fly
 
-Keep the simulator tab visible. The autopilot flies in real time: the capsule keeps moving
-between control updates. Pause/step is reserved for the AI Agent track. Stop the Python process to stop the helper.
+**Autopilot.** In a second terminal, run `python autopilot.py`. The example levels the capsule's attitude but does not dock. Edit its `Controller` class, with help from your AI coding assistant, to make it dock. C and C++ versions are in `examples/`, with build instructions at the top of each file.
 
-## Local AI agent
+**AI Agent.** `agent_pilot.py` is an example in which Claude flies the capsule. It uses your own Anthropic API key:
 
-Run `python agent_bridge.py --event https://dock-the-capsule.netlify.app` and launch the
-flight in the browser. Click Copy agent briefing in the local simulator and paste it into your agent,
-or give it the generated `AGENT_CONNECTION.md` file. The agent must run on this same computer. A cloud notebook
-cannot reach this loopback API.
+```
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-ant-...      # Windows PowerShell: $env:ANTHROPIC_API_KEY="sk-ant-..."
+python agent_pilot.py
+```
 
-## Scores
+To use another agent, such as Claude Code, click **Copy agent briefing** in the flight panel and give the briefing to your agent, or give it `AGENT_GUIDE.md` together with your autopilot URL.
 
-Successful flights submit automatically to the shared event leaderboard. Failed
-uploads have a Retry button in the browser and a receipt under `.dock-receipts/`.
-Run `python retry_scores.py` to retry while the event session is valid (8 hours).
-Receipts contain your participant token; keep them private. They contain no
-Claude/provider key. Results are browser-reported and reviewed by staff.
+The simulator runs in real time and does not wait for your program. To test faster, choose a simulation speed of 2×, 4×, or 8× in the flight panel before launching. Faster flights are not ranked.
 
-The familiar `Dragon()` API still works with an explicitly started `server.py`.
-For automatic event startup use `Dragon.start_event(event_url, track="autopilot")`.
+## 3. Results
 
-## Full API reference
+Successful real-time flights are submitted to the event leaderboard automatically. If an upload fails, use **Retry score upload** in the flight panel or run `python retry_scores.py`. Upload receipts in `.dock-receipts/` contain your event session token, so keep them private.
 
-Open `API.md` in this folder for every Python method, HTTP endpoint, command option, telemetry field, coordinate/sign convention, and error code. Autopilot is real time; pause/step is AI Agent only.
-
+See `API.md` for the full reference: telemetry fields, control inputs, coordinates, and the HTTP protocol for other languages.

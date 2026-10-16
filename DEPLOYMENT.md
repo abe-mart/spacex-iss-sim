@@ -1,65 +1,90 @@
 # Dock the Capsule operations
 
-The browser runs the simulation. Netlify Functions store event settings, sessions, and results in Neon. Python controllers run on participants' computers through the bundled loopback helper. Claude calls go directly from the browser to Anthropic with a participant's own key.
+The browser runs the simulation. A Netlify Function handles logins, crew sessions, results, the leaderboard, and AI CAPCOM, and stores event data in Neon Postgres. Autopilots and agents run on participants' computers and connect to a local simulator server from the starter kit.
 
 ## Local development
 
-Install Node.js 22 or newer and Python 3.11 or newer. Run `npm ci`, then `npm run dev`. Open http://127.0.0.1:8888. Development event data is kept in the ignored `.dock-data/event.json`; the development staff password defaults to `mission-control`. This fallback never runs in the deployed function.
+Install Node.js 22 or newer and Python 3.9 or newer. Run `npm ci`, then `npm run dev`, and open http://127.0.0.1:8888. Development data is kept in the ignored `.dock-data/event.json`, and the development staff password is `mission-control`. This fallback never runs in the deployed function. Set `SITE_PASSWORD` and `ANTHROPIC_API_KEY` in the environment to test the login and AI CAPCOM locally.
 
-Run `npm run check` and `npm run build` before deployment. The build generates the hosted pages and the downloadable Python starter ZIP in `dist/downloads`.
+Run `npm run check` and `npm run build` before deploying. The build generates the hosted pages and the downloadable starter kit in `dist/downloads`.
 
-## Database and deployment
+## Configuration
 
-1. For this existing site, reuse its Neon project (Dock the Capsule); do not create another project. For a separate installation, create a free Neon Postgres project. Test `db/migrations/001_dock.sql` on an isolated branch before applying it to production.
-2. Run `npm run db:migrate` with a **direct**, non-pooled `DATABASE_URL` injected into the process. The migration is idempotent. Keep connection strings out of Git and chat.
-3. Generate a salted staff password hash with `node scripts/password.mjs`, supplying the password through standard input. Use a unique password of at least 12 characters.
-4. In the Netlify project, configure server environment variables: pooled `DATABASE_URL`, `ADMIN_PASSWORD_HASH`, `SITE_URL`, and optional `EVENT_CODE`. Set them for the Functions runtime. The browser receives none of these secrets.
-5. Link the checkout with `netlify link`, create a preview with `netlify deploy --build`, and verify the event API and staff login. Publish with `netlify deploy --build --prod` after verification.
+All secrets are Netlify environment variables. None are stored in Git, and none are sent to browsers.
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Pooled Neon connection string. |
+| `ADMIN_PASSWORD_HASH` | scrypt hash of the staff password for `/admin`. |
+| `SITE_PASSWORD_HASH` | scrypt hash of the event password that participants enter. When it is set, the site requires a login. |
+| `ANTHROPIC_API_KEY` | The event's Claude API key, used only by the Netlify Function for AI CAPCOM. AI CAPCOM stays disabled unless `SITE_PASSWORD_HASH` is also set. |
+| `DAILY_BUDGET_USD` | Optional daily AI CAPCOM spending limit in US dollars (default 25). |
+| `SITE_URL` | Public site address, for example `https://dock-the-capsule.netlify.app`. |
+| `EVENT_CODE` | Optional extra code required to join. Not needed when the site password is set. |
+
+### Setting the event password and Claude API key
+
+1. **Create the API key.** In the [Claude Console](https://platform.claude.com), create a dedicated API key for the event. A separate workspace with a monthly spend limit adds a second safeguard alongside `DAILY_BUDGET_USD`.
+2. **Hash the event password.** In the repository, run:
+   ```sh
+   printf '%s' 'your-event-password' | node scripts/password.mjs
+   ```
+   The password must be at least 12 characters. The command prints a value that starts with `scrypt$`. Only this hash is stored in Netlify; keep the password itself to share with participants at the event.
+3. **Add the variables in Netlify.** Open the `dock-the-capsule` project, go to **Project configuration → Environment variables**, and choose **Add a variable** for each of `SITE_PASSWORD_HASH`, `ANTHROPIC_API_KEY`, and optionally `DAILY_BUDGET_USD`. For `ANTHROPIC_API_KEY`, select **Contains secret values**. Limit the scope to **Functions**, and set the value for the **Production** deploy context (and for any branch deploy you use for testing).
+
+   With the Netlify CLI in a linked checkout, the equivalent is:
+   ```sh
+   netlify env:set SITE_PASSWORD_HASH 'scrypt$…' --context production
+   netlify env:set ANTHROPIC_API_KEY 'sk-ant-…' --secret --context production
+   netlify env:set DAILY_BUDGET_USD 25 --context production
+   ```
+4. **Redeploy.** Functions read environment variables at deploy time, so trigger a new deploy (**Deploys → Trigger deploy → Deploy project**) after changing them.
+5. **Verify.** Open the site in a private window. It should ask for the event password. After logging in, open **Manual Piloting**: the AI CAPCOM menu should list the Claude models with Haiku selected, and CAPCOM should speak shortly after launch.
+
+### Database
+
+1. Reuse the existing Neon project for this site. Test migrations on an isolated Neon branch before applying them to production.
+2. Run `npm run db:migrate` with a direct (non-pooled) `DATABASE_URL` in the environment. The migration is idempotent.
+3. Generate the staff password hash the same way as the event password, and set `ADMIN_PASSWORD_HASH`.
 
 ## At the hackathon
 
-- Open `/admin`, sign in, set the event name, event code, enabled tracks, and join URL. Share the site address and event code at the table.
-- Put `/leaderboard` on the TV and click fullscreen. It displays Manual Piloting, Autopilot, and AI Agent in three columns on a wide screen. `/leaderboard?demo=1` is explicitly labeled sample data.
-- New participants start at `/`. Manual practice needs no installation or API key. Python participants download and unzip the starter, open a terminal in its folder, and follow `/setup/autopilot/`.
-- Successful flights rank by simulation time, then pulse count. Staff can exclude or restore results and export CSV. Results are client-reported with consistency checks; use staff review for disputed attempts.
-- If a local score upload fails, use `retry_scores.py` from the starter bundle. Hosted attempts have a retry button and retain the pending result in the current tab.
-- Close ranked entry in the admin panel after the event. Practice remains available. Monitor the Netlify and Neon usage dashboards during the event.
+- Share the site address and the event password. Participants log in once per browser; sessions last eight hours.
+- Open `/admin`, sign in, and set the event name and enabled tracks.
+- Put `/leaderboard` on the TV and click fullscreen. It shows Manual Piloting, Autopilot, and AI Agent in three columns. `/leaderboard?demo=1` shows labeled sample data.
+- Beginners open Manual Piloting and fly with AI CAPCOM; no installation is needed. Autopilot and AI Agent participants download the starter kit from their setup page and run `python -m hackathon.server`.
+- Successful real-time flights are ranked by simulation time, then pulse count. Staff can exclude or restore results and export CSV files. Results are reported by the browser and checked for consistency; review disputed attempts.
+- If a score upload fails, participants can use **Retry score upload** or `retry_scores.py`.
+- After the event, close the event in the admin page and monitor the Netlify, Neon, and Anthropic usage dashboards.
 
-Windows loopback and browser flows have been exercised during development. macOS uses the same standard-library helper and `python3` commands, but still needs an actual device smoke test. Paid Claude requests require a participant key and are separate from the hosting setup.
+## AI CAPCOM
 
-## Netlify usage budget
+The flight panel calls `POST /api/capcom` about every 15 seconds during a manual flight, and whenever the participant sends a radio message. The Netlify Function checks the session, applies a per-session rate limit (30 calls per minute) and the daily spending limit, and calls the Claude API with a fixed system prompt. Participants can choose Claude Haiku 5.5 (default), Sonnet 5.5, or Opus 5.5, or fly without AI CAPCOM. A Haiku call costs well under a cent, so a typical event costs a few dollars. Each call is limited to 8 seconds so that it finishes within Netlify's function time limit.
 
-Checked October 12, 2026: the team is on Free Legacy. The dashboard reported 724 MB of 100 GB bandwidth, 3 of 300 build minutes, and approximately 38K serverless requests across all projects this month. Official legacy documentation lists 125K serverless invocations per site/month. Other projects continue to consume their own allowances and shared bandwidth.
+## Flight timing and test speeds
 
-The simulator executes on the participant computer. Neither physics ticks, thruster commands, Python bridge polling, nor Claude calls consume Netlify function invocations. Hosted event joins, run creation, result submission, and standings reads do.
+All flights run in real time; the simulator never pauses for an autopilot or agent. Hidden simulator tabs pause and resume when they become visible again. In the Autopilot and AI Agent tracks, participants can choose 2×, 4×, or 8× speed for test flights. Test flights are never submitted, and the event API rejects any result whose flight clock is more than 30 seconds ahead of the wall-clock time since launch.
 
-The leaderboard refreshes every 30 seconds, pauses when hidden, and stops after 12 hours until reloaded. Failures back off up to five minutes. Sample mode makes no API calls. Public standings are cached at Netlify's durable CDN for 30 seconds with separate assistance-filter and Origin keys. Private standings, admin data, credentials, write responses, and errors are not cached. Public score updates or changes to public visibility can take up to 60 seconds to appear on the display.
+## Netlify usage
 
-Planning estimate for an 8-hour event: 15 participants, 300 attempts, one TV, normal joins and retries = fewer than 5K function requests even without CDN savings. If all 15 participants also leave leaderboards open, budget fewer than 20K uncached function requests. Initial simulator assets total about 34 MB uncompressed and the starter ZIP is 19 MB. Allow 1–3 GB for the event including fresh loads and downloads; repeat attempts reset the simulation without redownloading assets. These are estimates, not guarantees against unexpected public traffic or unrelated team usage.
+Checked October 12, 2026: the team is on Free Legacy, which lists 125K serverless invocations per site per month. The dashboard reported 724 MB of 100 GB bandwidth, 3 of 300 build minutes, and about 38K serverless requests across all projects that month.
 
-Use the Netlify team Usage & billing dashboard before the event. No paid plan, AI gateway, background jobs, scheduled functions, or automatic extra usage package was enabled for this app. Close the TV tab after the event. Free-plan hard limits can interrupt hosting, so review the team's current headroom if the event date is much later than this check.
+Physics, thruster commands, and the local simulator server's traffic never reach Netlify. Logins, joins, run creation, results, leaderboard reads, and AI CAPCOM calls do. For an 8-hour event with 15 participants, 300 attempts, and one TV, expect fewer than 5K requests for event traffic, plus about 4 requests per minute for each manual flight with AI CAPCOM (roughly 10K for the event). The simulator assets total about 34 MB and the starter kit about 19 MB; allow 1–3 GB of bandwidth.
 
-AI Agent is the advanced local-agent track. Participants run `agent_bridge.py`, launch in the local simulator, and click Copy agent briefing. The briefing includes their actual loopback URL and temporary controller token; the helper also writes an ignored `AGENT_CONNECTION.md` file. Provider credentials belong to the participant’s agent. Hosted `/sim/?mode=agent` links redirect to the setup instructions. Manual CAPCOM retains optional browser BYOK coaching.
+The leaderboard refreshes every 30 seconds, pauses while hidden, and stops after 12 hours until reloaded. Public standings are cached at Netlify's CDN for 30 seconds, so new results can take up to 60 seconds to appear on the TV.
 
-Flight timing: Manual Piloting and Autopilot run in real time. Event autopilots cannot issue pause/step, and participant controllers run while physics continues. Only AI Agent uses pause/step. Hidden simulator tabs pause for reliability; keep the flight tab visible.
+## Archive and reset
 
-Participant navigation: Beginner opens Manual Piloting; Intermediate opens `/setup/autopilot/`; Advanced opens `/setup/agent/`. Python downloads live on the dedicated setup pages. `/docs` is a guide chooser, and legacy track hash links redirect to their dedicated page. The public TV leaderboard displays the event join code; staff changes update that display within its cache/refresh window.
+Staff enter an archive label and type ARCHIVE AND RESET in the admin page. All current flights and settings are saved atomically before a new event starts with a new shared starting position. Results from flights launched in the archived event are rejected. Ask participants to stop flying before resetting.
 
-Archive/reset: Staff enter an archive label and type ARCHIVE AND RESET in admin. All current flights and event settings are captured atomically before a new event ID is activated. Historic rows and immutable snapshots are retained. Late archived-event results cannot enter new standings. Settings and join code stay the same. Past event CSV downloads include excluded and unfinished attempts. Stop flying before resetting; TV caches can take 60 seconds to refresh.
+## Starting positions and Challenge Mode
+
+Each event has one seeded starting position shared by all ranked attempts in every track. The docking-axis distance stays at 200 m and the lateral offset at 32 m, while its direction varies. Test flights use a random start. Archive and reset generates a new seed.
+
+Challenge Mode (noisy instruments, a broken thruster, or scrambled controls) is optional for the Autopilot and AI Agent tracks. Each mission has its own standings (`/leaderboard?challenge=noise`, `broken`, or `scrambled`), and docking is judged on the true state.
 
 ## Git continuous deployment
 
-Repository: `https://github.com/abe-mart/spacex-iss-sim`, production branch: `hackathon`.
+Repository: `https://github.com/abe-mart/spacex-iss-sim`, production branch `hackathon`. Netlify builds and publishes every push to `hackathon` using `netlify.toml` (`npm run build`, publish directory `dist`, functions in `netlify/functions`).
 
-Connection status: connected to the existing Netlify project `dock-the-capsule`. Production pushes/merges to `hackathon` build and publish automatically. Build command is `npm run build`, publish directory `dist`, functions directory `netlify/functions`; `netlify.toml` is authoritative. `.netlify/` remains ignored.
-
-Use feature branches and pull requests into `hackathon`. Automatic Deploy Previews and branch deploys are disabled. Enable them only with an isolated Neon branch and separate credentials: a preview sharing production DATABASE_URL can change the live event. Local development needs no production credentials.
-For an emergency manual release, run `npm run build`, then `netlify deploy --no-build --prod --dir dist --functions netlify/functions` from a linked checkout. After Git deployment is enabled, the next production-branch push replaces that manual release. Prefer fixing forward through Git.
-
-
-Randomized starts: Each new event has one shared seeded starting position for all ranked attempts and all three tracks. Docking-axis distance stays 200 m; lateral offset stays 32 m while its direction varies. Attitude and initial velocity retain the standard conditions. Practice randomizes each launch. Existing events without a seed retain the old start so their scores stay comparable. Archive/reset generates a new seed and fresh standings. Participants must download the latest starter for seeded events; older clients are rejected. Scenarios are reproducible, not secret or cheat-proof.
-
-Challenge Mode is optional for local Autopilot and AI Agent. Discover it at `/challenges/`, on either setup page, or in the local flight panel. Standard and each challenge have separate leaderboard filters (`?challenge=noise`, `broken`, or `scrambled`). Scenario metadata is stored on runs and included in staff CSV exports. Noise is deterministic by simulation step and event seed; scoring uses the true docking state. Challenge configuration cannot be changed during a live flight. No new database migration or per-tick hosted requests are needed. Participants should download the latest starter.
-
-
-The downloadable hackathon starter uses `starter/controls_demo.py` as its `examples/autopilot.py`. The repository's legacy complete controller is retained for maintainer use and is excluded from the ZIP. The tour runs only in practice and has no docking algorithm. Practice speed multiplies fixed physics step throughput (up to 8×), never the physics timestep, and resets remain unranked. Ranked flights force 1×. Faster physics remains local and adds no Netlify simulation requests.
+Use feature branches and pull requests into `hackathon`. Deploy previews and branch deploys are disabled by default. Enable a branch deploy only with an isolated Neon branch and its own `DATABASE_URL` for that deploy context, because a preview that shares the production database can change the live event. For an emergency manual release, run `npm run build`, then `netlify deploy --no-build --prod --dir dist --functions netlify/functions` from a linked checkout.

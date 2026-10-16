@@ -1,4 +1,6 @@
 import {loadAgentBrief,copyBrief} from './agent-brief';
+import {requireLogin} from './gate';
+void requireLogin();
 // Use the event's actual address in every copyable setup example.
 for (const block of document.querySelectorAll('code')) {
   if (block.textContent?.includes('https://YOUR-SITE.netlify.app')) {

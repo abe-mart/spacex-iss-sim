@@ -1,0 +1,88 @@
+DOCK THE CAPSULE: OPEN ITEMS
+============================
+
+Features described in the README, DOCK_THE_CAPSULE_PLAN.md, or the event goals that are not implemented,
+plus follow-up work from the merge of the two forks. Each item below is drafted as a GitHub issue
+(title, then body). Items 1-5 are needed before the event; items 6-12 are improvements.
+
+Status after the merge branch (merge-hackathon-features): the AI Agent example now exists
+(starter/agent_pilot.py), CAPCOM runs server-side with the event key, the site is password-protected,
+practice mode is replaced by unranked faster-than-real-time test flights, and the advanced challenge is live
+rather than turn-based.
+
+
+NEEDED BEFORE THE EVENT
+-----------------------
+
+1. Add an overall leaderboard
+   The event goal is a leaderboard that ranks docking times by challenge and also shows the best overall.
+   The leaderboard and the /api/leaderboard response only have per-track boards (manual, autopilot, agent).
+   Add an "overall" board (best successful time per crew across all three tracks) to makeBoards() in
+   src/server/app.ts, and a fourth column or a rotating panel on the TV display (src/web/leaderboard.ts).
+
+2. Configure production secrets and verify the deployed site
+   Set SITE_PASSWORD_HASH, ANTHROPIC_API_KEY, and DAILY_BUDGET_USD in Netlify (steps in DEPLOYMENT.md),
+   redeploy, and verify on dock-the-capsule.netlify.app: the login screen appears, AI CAPCOM answers on a
+   manual flight (calls now originate from the Netlify Function, which also resolves the browser
+   "Connection error" when connecting a personal key), /api/capcom returns 401 without a login, and the TV
+   leaderboard loads without a login.
+
+3. Smoke-test the starter kit on Windows and macOS
+   The kit was tested on macOS with Python 3.9 and Chrome (Python, C, and C++ autopilots; agent example with
+   Python 3.12). Still untested: Windows with py, the WinHTTP path of include/hackathon_client.h (MinGW and
+   Visual Studio builds), Edge, and a participant laptop without developer tools. Fix any setup friction
+   found and update starter/README.md.
+
+4. Tune the example AI agent (starter/agent_pilot.py)
+   The example flies live with Claude Haiku 5.5 at about 2-3 seconds per decision. In testing it leveled the
+   attitude, centered the lateral offset, and closed from 200 m to 0.24 m in about 470 s, then touched the
+   station because roll drifted to 1.9 degrees in the last seconds. A stricter prompt ("stop inside 3 m until
+   attitude is within 0.2 degrees") made it worse: it hovered for 10 minutes making sub-pulse attitude
+   corrections while gravity pulled it off axis. Likely fixes: have code hold attitude while Claude handles
+   translation, or give Claude a tool that sets target rates instead of raw pulses. Then document the
+   expected result on the setup page.
+
+5. Review and remove legacy code
+   The repository still contains an earlier version of the event app that is not deployed: hackathon/
+   (Render app with its own login and CAPCOM), render.yaml, iss-sim.spacex.com/js/hackathon.js, the root
+   API.md and LEGACY_SIMULATOR.md (original standalone server), and examples/autopilot.py (uses pause/step
+   and --slow, which events no longer allow). Confirm with both maintainers, then delete or move them to an
+   archive branch so participants and contributors are not misled.
+
+
+IMPROVEMENTS
+------------
+
+6. Update or retire DOCK_THE_CAPSULE_PLAN.md
+   The plan describes superseded designs: participant API keys entered in the browser (BYOK), pause/step
+   turn-based agent flights, /fly/manual|autopilot|agent routes, a browser "direct pilot" agent, and retiring
+   the scrambled and broken-thruster scenarios (which now exist as Challenge Mode). Rewrite it to match the
+   current design or mark it as historical.
+
+7. CAPCOM memory and debrief
+   The plan and the earlier fork describe CAPCOM that remembers a crew's previous attempts and gives a
+   debrief after each flight. The current CAPCOM is stateless within a flight (last 8 radio lines only) and
+   gives no debrief. Add a debrief call when a manual flight ends, and pass a short summary of the crew's
+   previous attempts.
+
+8. Admin event controls from the plan
+   Not implemented: scheduled opening and closing times, viewing bounded run traces, labeling test runs,
+   JSON export (CSV exists), and an audit log of staff actions.
+
+9. Show wall-clock time on the leaderboard
+   The plan says to show wall time separately from simulation time. Runs store created_at and finished_at,
+   so the leaderboard and CSV export can show elapsed wall time next to the ranked simulation time.
+
+10. Team names
+    The plan mentions joining with a callsign or team. Crews currently enter a free-text callsign only.
+    Decide whether teams need separate identity (for example, several laptops on one team) and implement it
+    if so.
+
+11. AI CAPCOM usage in the admin page
+    Show the day's AI CAPCOM spending against DAILY_BUDGET_USD and the number of calls, so staff can watch
+    costs during the event without opening the Anthropic Console.
+
+12. Safe preview deployments
+    Branch deploys and deploy previews are disabled because they would share the production database.
+    Create an isolated Neon branch and a branch-deploy context with its own DATABASE_URL so changes can be
+    tested on Netlify before merging into the production branch.

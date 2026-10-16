@@ -12,7 +12,8 @@ export interface Store {
   finish(id: string, participant: string, patch: Partial<Run>): Promise<Run | null>;
   exclude(id: string, excluded: boolean, reason: string): Promise<Run | null>;
   runs(): Promise<Run[]>;
-  permit(key: string, limit: number, windowSeconds: number): Promise<boolean>;
+  /** Adds `amount` (default 1) to a windowed counter; true while the total stays within `limit`. */
+  permit(key: string, limit: number, windowSeconds: number, amount?: number): Promise<boolean>;
   archiveAndReset(expected:string, archive:Omit<EventArchive,'runs'>, next:Settings):Promise<boolean>;
   archives():Promise<ArchiveSummary[]>;
   archive(id:string):Promise<EventArchive|null>;
@@ -75,10 +76,10 @@ export class NeonStore implements Store {
   }
   async archives() {return (await this.sql`SELECT data->>'id' AS id,data->>'label' AS label,(data->>'archived_at')::bigint AS archived_at,jsonb_array_length(data->'runs') AS flight_count FROM dock_settings WHERE id LIKE 'archive:%' ORDER BY (data->>'archived_at')::bigint DESC`).map(r=>r as unknown as ArchiveSummary);}
   async archive(id:string) {const rows=await this.sql`SELECT data FROM dock_settings WHERE id=${'archive:'+id}`;return rows[0]?.data as EventArchive || null;}
-  async permit(key: string, limit: number, windowSeconds: number) {
+  async permit(key: string, limit: number, windowSeconds: number, amount=1) {
     const now = Date.now(), expires = now + windowSeconds * 1000;
-    const rows = await this.sql`INSERT INTO dock_limits (key, count, expires_at) VALUES (${key}, 1, ${expires})
-      ON CONFLICT (key) DO UPDATE SET count = CASE WHEN dock_limits.expires_at <= ${now} THEN 1 ELSE dock_limits.count + 1 END,
+    const rows = await this.sql`INSERT INTO dock_limits (key, count, expires_at) VALUES (${key}, ${amount}, ${expires})
+      ON CONFLICT (key) DO UPDATE SET count = CASE WHEN dock_limits.expires_at <= ${now} THEN ${amount} ELSE dock_limits.count + ${amount} END,
       expires_at = CASE WHEN dock_limits.expires_at <= ${now} THEN ${expires} ELSE dock_limits.expires_at END RETURNING count`;
     return rows[0].count <= limit;
   }
@@ -112,8 +113,8 @@ export class MemoryStore implements Store {
   }
   async archives(){return Object.values(this.data.archives || {}).map(a=>({id:a.id,label:a.label,archived_at:a.archived_at,flight_count:a.runs.length}));}
   async archive(id:string){return this.data.archives?.[id]||null;}
-  async permit(key: string, limit: number, seconds: number) {
+  async permit(key: string, limit: number, seconds: number, amount=1) {
     let entry=this.limits.get(key); if(!entry || entry.expires<=Date.now()) { entry={count:0,expires:Date.now()+seconds*1000}; this.limits.set(key,entry); }
-    return ++entry.count<=limit;
+    return (entry.count+=amount)<=limit;
   }
 }

@@ -29,9 +29,11 @@ async function pack(directory,prefix) {
 }
 await cp(join(root,'starter','AGENT_GUIDE.md'),join(dist,'assets','agent-briefing.txt'));
 await pack(dist,'dock-the-capsule/site/');
-for(const name of ['dragon.py','server.py','event_bridge.py','examples/__init__.py'])zip['dock-the-capsule/'+name]=new Uint8Array(await readFile(join(root,name)));
-zip['dock-the-capsule/examples/autopilot.py']=new Uint8Array(await readFile(join(root,'starter','controls_demo.py')));
-for(const name of ['autopilot.py','agent_bridge.py','retry_scores.py','README.md','AGENT_GUIDE.md','API.md'])zip['dock-the-capsule/'+name]=new Uint8Array(await readFile(join(root,'starter',name)));
+for(const name of ['dragon.py','server.py','event_bridge.py'])zip['dock-the-capsule/'+name]=new Uint8Array(await readFile(join(root,name)));
+// Participant kit: the hackathon package (Python client + local server), C/C++ headers, and examples.
+for(const name of ['hackathon/__init__.py','hackathon/client.py','hackathon/server.py','include/hackathon_client.h','include/hackathon_client.hpp',
+  'examples/autopilot.c','examples/autopilot.cpp','autopilot.py','agent_pilot.py','retry_scores.py','README.md','AGENT_GUIDE.md','API.md'])
+  zip['dock-the-capsule/'+name]=new Uint8Array(await readFile(join(root,'starter',name)));
 zip['dock-the-capsule/VERSION']=strToU8('dock-v1\n');
 await mkdir(join(dist,'downloads'),{recursive:true});
 await cp(join(root,'starter','API.md'),join(dist,'downloads','dock-the-capsule-api.md'));

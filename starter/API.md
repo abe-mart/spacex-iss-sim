@@ -1,241 +1,155 @@
-# Dock the Capsule — event API reference
+# Dock the Capsule: autopilot API reference
 
-This reference ships as `API.md` in the starter ZIP. Use the local Python/HTTP
-interface for flight control. Netlify only stores event sessions and results;
-never send thruster commands to the hosted website.
+This reference ships as `API.md` in the starter kit. It applies to the Autopilot (intermediate) and AI Agent (advanced) challenges.
 
-## Start an Autopilot flight
+## How the pieces fit together
 
-Run `python autopilot.py --event https://dock-the-capsule.netlify.app` from the
-unzipped starter folder. The helper opens the simulator automatically. Enter
-your crew name and event code and click LAUNCH FLIGHT. No separate server command
-or pip packages are needed. Use `py` on Windows or `python3` on macOS if necessary.
+- The **simulator** runs in your browser and computes the physics in real time.
+- The **simulator server** (`python -m hackathon.server`) runs on your computer. It serves the simulator page and relays telemetry and thruster commands between the page and your program.
+- Your **autopilot or agent** connects to the simulator server and exchanges messages with it in a request-reply pattern. It requests the latest telemetry, decides what to do, and sends control inputs.
+- When a ranked flight ends, the browser submits the result to the event website. Your program never talks to the event website directly.
 
-For your own controller:
+## Quick start
 
-```python
-import time
-from dragon import Dragon, DragonError
-
-with Dragon.start_event("https://dock-the-capsule.netlify.app", track="autopilot") as sim:
-    state = sim.state()  # start_event waits for Launch in the browser
-    while state["status"] == "flying":
-        # Read state, calculate a correction, then send pulses.
-        if state["attitude"]["pitch"] < -0.5:
-            state = sim.pitch_up()
-        time.sleep(0.2)
-        state = sim.state()
-    print(state["status"], state["message"])
+```
+python -m hackathon.server           # terminal 1 (add --track agent for the AI Agent challenge)
+python autopilot.py                  # terminal 2
 ```
 
-This small example illustrates the API; it is not a complete docking controller.
-See `examples/autopilot.py` for a controls/sensors tour, not a docking controller.
+The server opens the simulator in your browser and prints an **autopilot URL** such as `http://127.0.0.1:52817/ap/3f9c…`. It also saves that URL in `.hackathon_url`, so Python programs can call `connect()` without arguments. In the browser, log in, enter a crew name, and press **LAUNCH FLIGHT**. Your autopilot takes control once the capsule arrives.
 
-**Autopilot runs in real time.** The capsule keeps moving between requests.
-Pause/step commands and `--slow` are rejected in the event Autopilot track.
-Only the advanced AI Agent track uses pause/step. Keep the simulator tab visible.
-
-## Connect to an existing helper
-
-The local helper uses an available loopback port and a temporary controller token.
-Use the values printed by the helper; do not assume port 5555.
-
-```python
-sim = Dragon("http://127.0.0.1:PORT", token="CONTROLLER-TOKEN")
-state = sim.state()
-```
-
-For HTTP, every API request needs the header
-`Authorization: Bearer CONTROLLER-TOKEN`. Send JSON command bodies with
-`Content-Type: application/json`. Only clients on this same computer can connect.
-The controller token is separate from the event code and any provider API key.
-
-## The task
-
-You start 200 m from the ISS, slightly off-axis and tilted. To dock, reach the docking port with **all** of these true at the moment of contact:
-
-| Condition | Limit |
-|---|---|
-| `range` | < 0.2 m (this is what triggers the check) |
-| `attitude.roll`, `.pitch`, `.yaw` | each within ±0.2° |
-| `velocity.x`, `.y`, `.z` | each within ±0.24 m/s |
-
-You **fail** if you arrive outside those limits, touch the station anywhere else, or drift more than 500 m away. Scored flights accept up to 7,200 simulation seconds.
-
-## Coordinates
-
-Everything is measured relative to the ISS docking port, using the same axes as the on-screen HUD:
-
-- **x**: distance along the docking axis. Starts at 200 m and must reach 0.
-- **y**: left/right offset. Starts at 12 m.
-- **z**: up/down offset. Starts at 30 m.
-
-`attitude` is in degrees. All zeros means pointing straight at the port, which is where you need to be.
-
-**Translation commands push along the vehicle's own axes, not the x/y/z above.** Once attitude is near zero the two line up:
-
-| Command | Effect when aligned |
-|---|---|
-| `translate_forward` / `translate_backward` | x decreases / increases |
-| `translate_right` / `translate_left` | y increases / decreases |
-| `translate_up` / `translate_down` | z increases / decreases |
-
-If you're still tilted, a "forward" pulse will push partly sideways too. Fix attitude first.
-
-## How the controls behave
-
-Like the real thing, thrusters fire in **pulses** and there is no friction or drag:
-
-- **Translation pulse:** changes velocity by 0.06 m/s (fine, default) or 0.30 m/s (coarse). The vehicle keeps drifting until you fire the opposite way.
-- **Rotation pulse:** changes rotation rate by 0.3°/s (fine) or 0.6°/s (coarse). Rotation also keeps going until countered. The actual rate eases toward the new value over about 1 s; `rotation_rate_commanded` shows where it is heading.
-
-Rotation pulses increase or decrease the matching attitude angle:
-
-| Increases | Decreases |
-|---|---|
-| `roll_left` | `roll_right` |
-| `pitch_up` | `pitch_down` |
-| `yaw_left` | `yaw_right` |
-
-The three rotations interact: turning about one axis while tilted on another shifts the other angles a little. Keep watching and correcting.
-
-**Gravity** (on by default) makes you sink slowly, at 0.006 m/s in z. This drift is *not* included in `velocity`, and it doesn't count toward the docking speed limit.
-
-## State reference
-
-`GET /api/state` (or `sim.state()`). Values are rounded to a few decimals.
-
-```json
-{
-  "status": "flying",
-  "message": "",
-  "paused": false,
-  "time_s": 12.5,
-  "position": {"x": 200.0, "y": 12.0, "z": 30.0},
-  "velocity": {"x": 0.0, "y": 0.0, "z": 0.0},
-  "range": 202.593,
-  "range_rate": 0.0,
-  "attitude": {"roll": 15.0, "pitch": -20.0, "yaw": -10.0},
-  "rotation_rate": {"roll": 0.0, "pitch": 0.0, "yaw": 0.0},
-  "rotation_rate_commanded": {"roll": 0.0, "pitch": 0.0, "yaw": 0.0},
-  "precision": {"translation": "fine", "rotation": "fine"},
-  "gravity": true,
-  "connected": true,
-  "ready": true
-}
-```
-
-| Field | Meaning |
-|---|---|
-| `status` | `loading` → `intro` → `arriving` → `flying` → `success` or `fail`. Only `flying` accepts thruster commands. |
-| `message` | Why the attempt ended, e.g. `"The following errors occurred: SPEED"`. |
-| `paused` | True while in pause/step mode. |
-| `time_s` | Sim seconds since this attempt began. Stops counting when the attempt ends, so after `success` it is the docking time. |
-| `position` | Metres from the docking port (see Coordinates). |
-| `velocity` | m/s, same axes. Excludes gravity drift. |
-| `range` | Straight-line distance to the port, in metres. |
-| `range_rate` | m/s. Negative means closing. |
-| `attitude` | Degrees. Target is 0 on all three. |
-| `rotation_rate` | Current rotation rate, deg/s. |
-| `rotation_rate_commanded` | The rate each axis is easing toward, deg/s. |
-| `precision` | Current pulse size for each control group. |
-| `gravity` | Whether gravity drift is on. |
-| `connected` | The local helper is receiving browser synchronization. |
-| `ready` | True after you launch in the flight panel. |
-
-Before the vehicle has arrived (`loading`, `intro`, and the first part of `arriving`), only `status`, `message`, `paused`, and `time_s` are present.
-
-## HTTP endpoints and commands
-
-| Endpoint | Response |
-|---|---|
-| `GET /api` | Available command names and whether the participant has launched (`ready`). |
-| `GET /api/state` | State object above; 503 if the browser is disconnected. |
-| `POST /api/command` | One command result, or an ordered array of results for a batch. |
-
-Single JSON body:
-```json
-{"command":"yaw_left","count":2}
-```
-Ordered batch (1–50 commands):
-```json
-[{"command":"yaw_left","count":2},{"command":"translate_forward","count":1}]
-```
-Single response:
-```json
-{"ok":true,"command":"yaw_left","state":{"status":"flying","time_s":12.5}}
-```
-The actual `state` includes the full telemetry shown above. Failed browser
-commands return `ok:false`, an `error` message, and the resulting `state`.
-A batch returns an array of these result objects. Check every `ok` field.
-Physics continues between commands in the Autopilot track; a batch is ordered,
-not an atomic physics snapshot.
-
-| Command | Options | Meaning |
-|---|---|---|
-| `roll_left`, `roll_right`, `pitch_up`, `pitch_down`, `yaw_left`, `yaw_right` | integer `count`: 1–50, default 1 | Apply rotation pulses. |
-| `translate_forward`, `translate_backward`, `translate_left`, `translate_right`, `translate_up`, `translate_down` | integer `count`: 1–50, default 1 | Apply translation pulses. |
-| `translation_fine`, `translation_coarse` | none | Select 0.06 or 0.30 m/s translation pulses. |
-| `rotation_fine`, `rotation_coarse` | none | Select 0.3 or 0.6 degrees/s rotation pulses. |
-| `gravity_on` | none | Keep gravity enabled. `gravity_off` is rejected for event flights. |
-| `reset` | none | Start a new recorded attempt and wait for the capsule to arrive; may take about 15 seconds. Event Autopilot resumes real time; AI Agent pauses. |
-| `resume` | none | Resume real-time physics. Useful after returning to a hidden/paused Autopilot tab. |
-| `pause` | none | AI Agent only: freeze simulation time while thinking. |
-| `step` | finite `seconds`: >0 and <=60, default 1 | AI Agent only: advance while paused, then freeze. Stops early on docking/failure. |
-
-Do not send control commands until you have joined and launched in the browser.
-Reset creates another ranked attempt; it is not just a local repositioning tool.
+Keep the server and the simulator tab open while you work. You can restart your autopilot as often as you like. Each flight is launched from the browser. Use `py` on Windows or `python3` on macOS if `python` is not found.
 
 ## Python client
 
-`dragon.py` uses only the Python standard library.
+```python
+import hackathon.client as hackathon_client
 
-| Method | Returns / behavior |
+connection = hackathon_client.connect()            # or connect("http://127.0.0.1:<port>/ap/<key>")
+
+while True:
+    data = hackathon_client.request_telemetry(connection)
+    if data["status"] != "flying":
+        ...                                        # waiting, docked, failed, or offline
+    state = data["state"]                          # 12 numbers; see "Telemetry"
+    inputs = my_controller.update(state)           # 6 numbers; see "Control inputs"
+    hackathon_client.send_control_inputs(connection, inputs)
+```
+
+| Function | Description |
 |---|---|
-| `Dragon.start_event(event_url, track="autopilot", wait=True, open_browser=True)` | Starts and owns the local helper. Opens the browser and waits for Launch by default. `track` is `autopilot` or `agent`. |
-| `Dragon(url, token=...)` | Connects to an already-running helper; does not own or stop that helper. |
-| `state()` | Current telemetry dictionary. |
-| `command(name, **options)` | State after one acknowledged command, e.g. `command("translation_fine")`. |
-| `commands(*commands)` | State after the last acknowledged command. Items can be names or dictionaries. At least one command is required. |
-| `reset()` | New recorded attempt; returns state once flying. |
-| `resume()` | Resume real-time flight. |
-| `pause()`, `step(seconds=1.0)` | AI Agent only. |
-| `roll_left(count=1)`, `roll_right`, `pitch_up`, `pitch_down`, `yaw_left`, `yaw_right` | Rotation helpers; each returns state. |
-| `translate_forward(count=1)`, `translate_backward`, `translate_left`, `translate_right`, `translate_up`, `translate_down` | Translation helpers; each returns state. |
-| `close()` | Stops only the helper started by this client. A `with` block closes it automatically. |
+| `connect(url=None, timeout_ms=10000)` | Connects to the simulator server. Without a URL, it reads `.hackathon_url`. |
+| `request_telemetry(connection)` | Returns the latest telemetry as a dict. Also available as `connection.request_telemetry()`. |
+| `send_control_inputs(connection, inputs)` | Fires thruster pulses. Returns once the simulator has applied them. Also available as `connection.send_control_inputs(inputs)`. |
+| `connection.close()` | Closes the connection. A `with` block closes it automatically. |
 
-The Python client unwraps HTTP results and raises `DragonError` on a failed
-command, malformed request, missing launch, rejected token, or disconnected tab.
-Catch it, inspect the message, and stop issuing pulses until the problem is fixed.
+Every reply is a dict with `ok`, plus `error` when `ok` is false (for example, when no flight is in progress). `hackathon_client.HackathonError` is raised when a request does not get through at all: the server is not running, the URL is wrong, or the request timed out. The client uses only the Python standard library.
 
-## Errors, timing, and results
+`autopilot.py` is a complete template: it waits for a flight, runs a control loop that skips repeated and stale telemetry, and prints progress. Its example controller only levels the attitude. Making the capsule dock is your task.
 
-- HTTP 200: read the `ok` fields for commands; state reads return telemetry directly.
-- HTTP 400: invalid command/options, including Autopilot pause/step or gravity_off.
-- HTTP 401: missing/incorrect temporary controller token.
-- HTTP 403: non-loopback host or mismatched browser Origin.
-- HTTP 409: join and launch in the browser first.
-- HTTP 413: request exceeds the helper's 32 KB body limit.
-- HTTP 503: browser disconnected. Keep exactly one paired simulator tab visible.
-- HTTP 504: browser stopped responding while a command was pending.
+## C and C++ clients
 
-Do not blindly retry pulses after a timeout: a pulse may already have executed.
-Re-read telemetry first. Closed helpers invalidate their temporary token.
+The header-only clients in `include/` provide the same functions:
 
-A successful flight automatically submits to the leaderboard. If the upload
-fails, use Retry score upload in the flight panel or `python retry_scores.py`.
-Participant event sessions last eight hours. Keep `.dock-receipts` private.
-Only use the documented API for control; do not alter browser physics or scores.
+| C (`hackathon_client.h`) | C++ (`hackathon_client.hpp`) |
+|---|---|
+| `hk_connect(url, timeout_ms)` | `hackathon::Client client(url)` |
+| `hk_request_telemetry(c, &telemetry)` | `client.requestTelemetry()` |
+| `hk_send_control_inputs(c, inputs, &reply)` | `client.sendControlInputs({x, y, z, roll, pitch, yaw})` |
+| `hk_close(c)` | (destructor) |
 
-## Starting positions
+They use libcurl on macOS and Linux and WinHTTP on Windows. Build commands are at the top of `examples/autopilot.c` and `examples/autopilot.cpp`. Pass the autopilot URL printed by the server as the first argument.
 
-Ranked flights receive the same randomized starting position for the current event. Autopilots and agents should read `position` from telemetry instead of assuming the original coordinates. A reset preserves that event scenario. Practice starts vary each launch. Download the latest bundle if the event asks you to update.
+## Other languages: the HTTP protocol
+
+Any language that can send HTTP requests can fly. Send `POST <autopilot URL>/request` with a JSON body and `Content-Type: application/json`. The URL contains a secret key, so no other header is needed. Include a `"client"` field with any short identifier that stays the same for the life of your program.
+
+```
+{"request": "telemetry", "client": "a1b2c3"}
+{"request": "control", "inputs": [0, 0, -2, 0, 1, 0], "client": "a1b2c3"}
+```
+
+Replies have HTTP status 200 and the JSON fields described below. Status 400 means the request was malformed, and status 404 means the autopilot URL is wrong (for example, from an earlier server run).
+
+## Telemetry
+
+| Field | Description |
+|---|---|
+| `status` | `"flying"` while you have control; `"waiting"` before a flight is launched; `"docked"` or `"failed"` after your flight ends; `"offline"` when the simulator tab is not connected. |
+| `docked` | `true` once your flight has docked. |
+| `flight_id` | Identifier of the current flight. It changes with every launch. |
+| `ranked` | `true` for real-time leaderboard flights; `false` for faster-than-real-time test flights. |
+| `simulation_speed` | 1 for real time; 2, 4, or 8 for test flights. |
+| `timestamp_ms` | Simulation time in this flight, in milliseconds. If it has not changed since your last request, there is nothing new yet. |
+| `state` | 12 numbers, or `null` when there is no flight: `[x, y, z, x_dot, y_dot, z_dot, roll, pitch, yaw, roll_dot, pitch_dot, yaw_dot]`. Units are metres, m/s, degrees, and deg/s. |
+| `commanded_rates` | `[roll, pitch, yaw]`: the rotation rates in deg/s that the capsule is easing toward. |
+| `message` | Why a flight ended, or why the simulator is unavailable. |
+
+Telemetry is the newest state the browser has reported (it reports about every 30 ms). It never predates your last control inputs taking effect, so your controller does not react twice to the same situation. A finished flight is reported only to the program that flew it; a program started afterwards sees `"waiting"` until the next launch.
+
+## Control inputs
+
+Control inputs are 6 numbers, `[x, y, z, roll, pitch, yaw]`, each a number of thruster pulses. A positive pulse increases that velocity or rotation rate, and a negative pulse decreases it. Inputs are rounded to whole pulses and limited to ±50 per axis per request. The reply contains `timestamp_ms` (the simulation time when the inputs took effect) and `pulses` (the whole pulses fired on each axis).
+
+- **Translation pulse:** changes velocity by 0.06 m/s. There is no friction, so the capsule keeps drifting until you fire the opposite way.
+- **Rotation pulse:** changes the commanded rotation rate by 0.3 deg/s. The measured rate eases toward the commanded rate over about one second.
+
+Translations push along the capsule's own axes. They match x, y, and z only when roll, pitch, and yaw are near zero, so correct the attitude first.
+
+## Coordinates and docking
+
+Position is measured from the ISS docking port, using the same axes as the on-screen display:
+
+- **x:** distance along the docking axis. It starts near 200 m and must reach 0. Approaching the station means negative x velocity.
+- **y:** left/right offset.
+- **z:** up/down offset.
+- **roll, pitch, yaw:** all zero means pointing straight at the port.
+
+The starting position is the same for every ranked flight in the event. Read it from telemetry rather than assuming fixed values. The capsule docks when all of these are true at the moment the range drops below 0.2 m:
+
+| Condition | Limit |
+|---|---|
+| Range | < 0.2 m |
+| Roll, pitch, yaw | each within ±0.2° |
+| Each velocity component | within ±0.24 m/s |
+
+A flight fails if the capsule arrives outside those limits, touches the station anywhere else, or drifts more than 500 m away. Gravity causes a slow downward drift of 0.006 m/s in z, which is not included in the velocity telemetry and does not count toward the docking speed limit.
+
+## Real time and test flights
+
+Ranked flights run in real time. The capsule keeps moving while your program computes, and the simulator does not pause for it. To test faster, choose a simulation speed of 2×, 4×, or 8× in the flight panel before launching. Faster flights are never submitted to the leaderboard, and the event server rejects results whose flight clock runs ahead of real time. Use `timestamp_ms` rather than the wall clock for controller timing.
+
+Keep the simulator tab visible. Browsers slow down hidden tabs, so a flight pauses while its tab is hidden and resumes when the tab is visible again.
+
+## Results
+
+When a ranked flight docks, the browser submits the result to the event leaderboard. The lowest simulation time wins, and fewer thruster pulses break ties. If the upload fails, use **Retry score upload** in the flight panel or run `python retry_scores.py`. Upload receipts in `.dock-receipts/` contain your event session token, so keep them private.
 
 ## Challenge Mode
 
-Optional Challenge Mode is available in the local Autopilot and AI Agent flight panel before launch. Choose Standard docking to return to the normal leaderboard. Missions are Noisy Instruments (position ±0.5 m/axis, velocity ±0.03 m/s/axis), Broken Thruster (`translate_left` disabled), and Scrambled Controls (a seeded permutation of translation commands; rotation unchanged). Noise is deterministic per simulation step; polling while paused does not produce fresh noise. Telemetry includes `challenge`. Docking and submitted results use true physical state, not noisy measurements. Resets retain the selected scenario for that run. Each mission has separate standings and a shared event seed. The visual simulator HUD remains available; this is a controller challenge, not a tamper-proof competition.
+Challenge Mode is optional. Choose a mission in the local flight panel before launching:
 
+- **Noisy instruments:** position measurements vary by up to ±0.5 m per axis and velocity by ±0.03 m/s. Attitude is unaffected.
+- **Broken thruster:** the left translation thruster (negative y input) produces no force.
+- **Scrambled controls:** the six translation directions are mapped to different thrusters. Rotation is unaffected.
 
-## Faster practice
+Each mission has separate standings. Docking is judged on the true state, not the noisy measurements.
 
-Open Practice & testing speed in the flight panel and choose 1×, 2×, 4×, or 8×, then click Fly unranked practice. Ranked flights always use 1×. Faster practice runs more fixed 60 Hz physics steps per wall-clock second; time_s remains simulation time. Actual throughput depends on the laptop and the tab must stay visible. AI Agent practice starts resumed; pause/step still works, and speed does not scale requested step durations. Telemetry includes practice (boolean) and simulation_speed (number). The example waits against time_s so it works at accelerated speeds. Practice resets remain unranked and preserve the selected speed.
+## Low-level command API
+
+The simulator server also offers the original command interface, used by `dragon.py`. Most participants do not need it. Requests require the header `X-Dock-Bridge: <key>`, where `<key>` is the last part of the autopilot URL.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/state` | Full simulator telemetry as named fields (`position`, `velocity`, `attitude`, `rotation_rate`, `rotation_rate_commanded`, `range`, `range_rate`, `status`, `time_s`, and more). |
+| `POST /api/command` | One command such as `{"command": "yaw_left", "count": 2}`, or an ordered list of 1–50 commands. Returns the resulting state. |
+| `GET /api` | The list of available commands. |
+
+Commands: `roll_left`, `roll_right`, `pitch_up`, `pitch_down`, `yaw_left`, `yaw_right`, `translate_forward`, `translate_backward`, `translate_left`, `translate_right`, `translate_up`, `translate_down` (each with an optional `count` of 1–50), `translation_fine`, `translation_coarse`, `rotation_fine`, `rotation_coarse`, `resume`, and `reset` (starts a new recorded attempt). `pause`, `step`, and `gravity_off` are not available during the event.
+
+```python
+from dragon import Dragon
+sim = Dragon("http://127.0.0.1:<port>", token="<key>")
+state = sim.state()
+sim.yaw_left(2)
+```

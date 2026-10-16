@@ -20,7 +20,8 @@ export interface Session {
   token_hash: string;
   participant_id: string;
   callsign: string;
-  role: "participant" | "admin";
+  /** "access" sessions only prove the site password was entered; "participant" sessions also carry a callsign. */
+  role: "access" | "participant" | "admin";
   expires_at: number;
 }
 export interface Run {

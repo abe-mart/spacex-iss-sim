@@ -17,9 +17,8 @@ let previous: BoardData | undefined, lastSuccess=0, toastTimer: ReturnType<typeo
 let refreshTimer: ReturnType<typeof setTimeout>, generation=0;
 const refreshInterval=30000, sessionLimit=12*3600000, openedAt=Date.now();
 let failures=0;
-const names={manual:['APOLLO CLUB','LUNAR LIZARDS','ORBITAL EXPRESS','STARBOARD','TEAM AURORA','THE RIGHT STUFF','MARS OR BUST','GOOD GRAVITY'],
-  autopilot:['NULL GRAVITY','CTRL + SPACE','DOCK.EXE','VECTOR ZERO','THE PID CREW','STABLE ORBIT','BYTE ME','BURN RATE'],
-  agent:['MISSION MIND','HAL & FRIENDS','PROMPT FLIGHT','DEEP ORBIT','TOKEN THRUST','AGENT ZERO','CLAUDE NINE','THINK & DOCK']};
+const crews=['ALPHA','BRAVO','CHARLIE','DELTA','ECHO','FOXTROT','GOLF','HOTEL'];
+const names={manual:crews.map(c=>c+' PILOTS'),autopilot:crews.map(c=>c+' CONTROLS'),agent:crews.map(c=>c+' AGENTS')};
 function demoData(): BoardData {
   const boards=Object.fromEntries(TRACKS.map((track,j)=>[track,names[track].map((name,i)=>({
     id:`demo-${track}-${i}`,callsign:name,track,assisted:track==='manual' && i%2===0,model:'',
@@ -72,7 +71,7 @@ function render(data: BoardData) {
 async function refresh() {
   clearTimeout(refreshTimer); const current=++generation;
   if(document.hidden || Date.now()-openedAt>=sessionLimit) {
-    if(!document.hidden) status('DISPLAY PAUSED / RELOAD TO RESUME','offline');
+    if(!document.hidden) status('DISPLAY PAUSED. RELOAD THE PAGE TO RESUME.','offline');
     return;
   }
   try {
@@ -81,7 +80,7 @@ async function refresh() {
     render(data); lastSuccess=Date.now(); status(demo?'SAMPLE DATA / PREVIEW':'LIVE STANDINGS',demo?'demo':'');
     failures=0;
     if(!demo) try { localStorage.setItem(cacheKey,JSON.stringify(data)); } catch {}
-    $('updated').textContent=demo?'Preview only · these are fictional scores':'Refreshes every 30s · public standings may lag up to 60s';
+    $('updated').textContent=demo?'Preview: these scores are examples, not real results':'Standings refresh every 30 seconds and may be up to 60 seconds behind.';
   } catch(error) {
     failures++;
     status('SIGNAL LOST / RETRYING','offline');

@@ -3,6 +3,7 @@ import { RULES_VERSION, TRACKS, type BoardData, type Run, type Session, type Set
 import type { Store } from "./store";
 import {eventStart} from '../shared/start';
 import {CHALLENGES} from '../shared/challenges';
+import {CAPCOM_MODELS,DEFAULT_CAPCOM_MODEL,costMicros,type Capcom} from './capcom';
 
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 export function passwordHash(password: string, salt = randomBytes(16).toString("hex")) {
@@ -19,7 +20,14 @@ function checkPassword(password: string, encoded: string) {
 class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
-export interface Options { adminPasswordHash?: string; eventCode?: string; siteUrl?: string; development?: boolean }
+export interface Options {
+  adminPasswordHash?: string; eventCode?: string; siteUrl?: string; development?: boolean;
+  /** scrypt hash of the participant site password. When set, every participant route requires a login. */
+  sitePasswordHash?: string;
+  /** Server-side Claude access for AI CAPCOM. Disabled unless a site password is also configured (or in development). */
+  capcom?: Capcom;
+  dailyBudgetUsd?: number;
+}
 export function isLoopbackOrigin(origin: string) {
   try { const u=new URL(origin); return u.protocol==='http:' && ['127.0.0.1','localhost','[::1]'].includes(u.hostname); }
   catch { return false; }
@@ -60,7 +68,8 @@ export function validateFinish(body: Record<string, unknown>, run: Run) {
     }
     if(Math.abs(number(state.time_s,0,7200,'telemetry time')-time)>0.02) throw new ApiError(400,'Flight clock does not match telemetry.');
   }
-  if(run.track==='manual' && time>(Date.now()-run.created_at)/1000+30) throw new ApiError(400,'Manual flight clock exceeds elapsed time.');
+  // Ranked flights run in real time; a flight clock ahead of the wall clock was flown faster than real time.
+  if(time>(Date.now()-run.created_at)/1000+30) throw new ApiError(400,'The flight clock is ahead of real time. Only real-time flights are ranked.');
   return {outcome: outcome as Run['outcome'], time_s: Math.round(time*1000)/1000, pulses,
     message: typeof body.message==='string'?body.message.slice(0,200):'', finished_at:Date.now()};
 }
@@ -116,9 +125,15 @@ export function createApp(store: Store, options: Options={}) {
       if(request.method==='OPTIONS') return new Response(null,{status:204,headers});
       const cookies=Object.fromEntries((request.headers.get('cookie')||'').split(';').map(x=>x.trim().split('=')));
       const rawToken=request.headers.get('authorization')?.replace(/^Bearer\s+/i,'') || cookies.dock_session || '';
+      const loginRequired=!!options.sitePasswordHash;
+      // Any valid session (login, crew, or staff) shows the site password was entered.
+      const hasAccess=async () => !loginRequired || !!await store.session(digest(rawToken));
+      const requireAccess=async () => { if(!await hasAccess()) throw new ApiError(401,'Log in with the event password first.'); };
+      const capcomEnabled=!!options.capcom && (loginRequired || !!options.development);
       const who=async (role?: string) => {
         const s=await store.session(digest(rawToken));
-        if(!s || (role && s.role!==role)) throw new ApiError(401,role==='admin'?'Staff login required.':'Join the event first.');
+        // Login-only sessions cannot fly or score until the crew joins with a callsign.
+        if(!s || (role?s.role!==role:s.role==='access')) throw new ApiError(401,role==='admin'?'Staff login required.':'Join the event first.');
         return s;
       };
       const body=async () => {
@@ -141,7 +156,36 @@ export function createApp(store: Store, options: Options={}) {
       };
       const s=await settings(url.origin);
       const path=url.pathname;
-      if(path==='/api/config' && request.method==='GET') return respond(publicSettings(s,!!options.development));
+      if(path==='/api/config' && request.method==='GET') return respond({...publicSettings(s,!!options.development),login_required:loginRequired,
+        capcom:{available:capcomEnabled,default_model:DEFAULT_CAPCOM_MODEL,models:Object.entries(CAPCOM_MODELS).map(([id,m])=>({id,name:m.label}))}});
+      if(path==='/api/access' && request.method==='GET') {
+        await requireAccess(); return respond({ok:true,login_required:loginRequired});
+      }
+      if(path==='/api/login' && request.method==='POST') {
+        await rate(`login:${ip}`,10,60);
+        if(!loginRequired) return respond({ok:true,login_required:false});
+        const b=await body(), pass=String(b.password || '');
+        if(pass.length>128 || !checkPassword(pass,options.sitePasswordHash!)) throw new ApiError(401,'That password is incorrect.');
+        const login=await session('access','');
+        return respond({ok:true,token:login.token,expires_at:login.expires_at});
+      }
+      if(path==='/api/capcom' && request.method==='POST') {
+        await requireAccess();
+        if(!capcomEnabled) throw new ApiError(503,'AI CAPCOM is not configured for this event.');
+        await rate(`capcom:${digest(rawToken || ip)}`,30,60);
+        const b=await body(), model=String(b.model || DEFAULT_CAPCOM_MODEL);
+        if(!Object.hasOwn(CAPCOM_MODELS,model)) throw new ApiError(400,'Choose an available CAPCOM model.');
+        const day=new Date().toISOString().slice(0,10), budget=Math.round((options.dailyBudgetUsd ?? 25)*1e6);
+        // Adding zero checks the running total without spending; the actual cost is added after the call.
+        if(!await store.permit(`capcom-spend:${day}`,budget,2*86400,0)) throw new ApiError(429,'Today\'s AI CAPCOM budget has been used. Please ask event staff.');
+        const content=JSON.stringify({telemetry:b.telemetry ?? null,recent:Array.isArray(b.recent)?b.recent.slice(-8):[],
+          crew_message:typeof b.crew_message==='string'?b.crew_message.slice(0,300):''});
+        let reply;
+        try { reply=await options.capcom!.ask(model,content); }
+        catch { throw new ApiError(502,'AI CAPCOM did not respond. Please try again shortly.'); }
+        await store.permit(`capcom-spend:${day}`,budget,2*86400,costMicros(model,reply));
+        return respond({text:reply.text});
+      }
       if(path==='/api/leaderboard' && request.method==='GET') {
         if(!s.leaderboard_public) await who();
         const challenge=url.searchParams.get('challenge') || 'standard';
@@ -157,6 +201,7 @@ export function createApp(store: Store, options: Options={}) {
       }
       if(path==='/api/join' && request.method==='POST') {
         await rate(`join:${ip}`,40,60);
+        await requireAccess();
         const b=await body();
         if(!s.event_open) throw new ApiError(409,'The event is closed.');
         if(s.event_code_hash && !equal(digest(String(b.event_code || '')),s.event_code_hash)) throw new ApiError(401,'That event code did not match.');

@@ -55,7 +55,7 @@ $('export-csv').onclick=()=>exportRuns(runs,'dock-the-capsule-flights.csv');
 $('archive-reset-form').addEventListener('submit',async e=>{
  e.preventDefault();const button=$<HTMLButtonElement>('archive-reset');button.disabled=true;
  try{await api('/api/admin/archive-reset','POST',{event_id:eventId,label:$<HTMLInputElement>('archive-label').value,confirm:$<HTMLInputElement>('archive-confirm').value});
- $<HTMLFormElement>('archive-reset-form').reset();await load();status('Event archived. Fresh leaderboard ready.');}
+ $<HTMLFormElement>('archive-reset-form').reset();await load();status('The event was archived and the leaderboard was reset.');}
  catch(e){status(displayError(e));}finally{button.disabled=false;}
 });
 void load().catch(e=>{if((e as any).status!==401)status(displayError(e));});

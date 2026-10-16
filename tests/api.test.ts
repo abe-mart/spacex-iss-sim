@@ -6,6 +6,8 @@ import {RULES_VERSION,type Run,type Settings} from '../src/shared/types';
 
 const state={status:'success',time_s:85.3,range:.15,attitude:{roll:0,pitch:.1,yaw:0},velocity:{x:-.12,y:0,z:0},gravity:true};
 function fixture(){const store=new MemoryStore();const app=createApp(store,{eventCode:'DOCK',siteUrl:'https://dock.test',adminPasswordHash:passwordHash('long-staff-password')});
+  // Flights are submitted immediately in tests; backdate launches so the flight clock stays behind real time.
+  const createRun=store.createRun.bind(store);store.createRun=async run=>{run.created_at-=600000;return createRun(run);};
   let serial=0;
   async function call(path:string,method='GET',body?:unknown,token='',origin='https://dock.test',cookie=''){
     const headers:Record<string,string>={};if(token)headers.Authorization=`Bearer ${token}`;if(origin)headers.Origin=origin;if(cookie)headers.Cookie=cookie;

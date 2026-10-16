@@ -8,8 +8,12 @@ export function apiOrigin() {
 }
 function tokenKey() { return `dock.session.${apiOrigin()}`; }
 export function sessionToken() { try { return sessionStorage.getItem(tokenKey()) || ''; } catch { return ''; } }
+export function rememberToken(token: string) {
+  try { sessionStorage.setItem(tokenKey(),token); } catch { /* private browser mode */ }
+}
 export function rememberSession(token: string, callsign: string) {
-  try { sessionStorage.setItem(tokenKey(),token); localStorage.setItem('dock.callsign',callsign); } catch { /* private browser mode */ }
+  rememberToken(token);
+  try { localStorage.setItem('dock.callsign',callsign); } catch { /* private browser mode */ }
 }
 export function callsign() { try { return localStorage.getItem('dock.callsign') || ''; } catch { return ''; } }
 export async function api<T=any>(path: string, method='GET', body?: unknown): Promise<T> {
