@@ -69,7 +69,7 @@ The participant API reference is [starter/API.md](starter/API.md), shipped as `A
 
 ## Collaborating and deploying
 
-The integration branch is `hackathon` in **abe-mart/spacex-iss-sim**. Create a feature branch, run the checks, and open a pull request into `hackathon`. Netlify builds and publishes every push to `hackathon` automatically, so merge reviewed changes deliberately. Branch deploys and deploy previews are disabled to keep preview code away from the live event database.
+The integration branch is `hackathon` in **abe-mart/spacex-iss-sim**. Create a feature branch, run the checks, and open a pull request into `hackathon`. Netlify builds and publishes every push to `hackathon` automatically, so merge reviewed changes deliberately. Other branches get branch deploys at `https://<branch-name>--dock-the-capsule.netlify.app`. Branch deploys currently share the production database and environment variables, so test flights on a branch deploy appear on the live leaderboard; archive and reset the event before it starts.
 
 Production secrets live in Netlify's environment variables, never in Git. See [DEPLOYMENT.md](DEPLOYMENT.md) for configuration, event operations, and usage estimates.
 

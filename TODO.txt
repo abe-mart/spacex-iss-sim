@@ -82,7 +82,8 @@ IMPROVEMENTS
     Show the day's AI CAPCOM spending against DAILY_BUDGET_USD and the number of calls, so staff can watch
     costs during the event without opening the Anthropic Console.
 
-12. Safe preview deployments
-    Branch deploys and deploy previews are disabled because they would share the production database.
-    Create an isolated Neon branch and a branch-deploy context with its own DATABASE_URL so changes can be
-    tested on Netlify before merging into the production branch.
+12. Isolate branch deploys from the production database
+    Branch deploys work (https://<branch-name>--dock-the-capsule.netlify.app) but share the production
+    DATABASE_URL, so test flights on a branch deploy appear on the live leaderboard. Create a Neon branch and
+    set a different DATABASE_URL for the branch-deploy context in Netlify. Until then, archive and reset the
+    event before it starts, and do not test on branch deploys during the event.
