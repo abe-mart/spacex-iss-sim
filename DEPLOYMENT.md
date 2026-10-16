@@ -17,7 +17,7 @@ All secrets are Netlify environment variables. None are stored in Git, and none 
 | `DATABASE_URL` | Pooled Neon connection string. |
 | `ADMIN_PASSWORD_HASH` | scrypt hash of the staff password for `/admin`. |
 | `SITE_PASSWORD_HASH` | scrypt hash of the event password that participants enter. When it is set, the site requires a login. |
-| `ANTHROPIC_API_KEY` | The event's Claude API key, used only by the Netlify Function for AI CAPCOM. AI CAPCOM stays disabled unless `SITE_PASSWORD_HASH` is also set. |
+| `ANTHROPIC_KEY` (or `ANTHROPIC_API_KEY`) | The event's Claude API key, used only by the Netlify Function for AI CAPCOM. The production project stores it as `ANTHROPIC_KEY`. AI CAPCOM stays disabled unless `SITE_PASSWORD_HASH` is also set. |
 | `DAILY_BUDGET_USD` | Optional daily AI CAPCOM spending limit in US dollars (default 25). |
 | `SITE_URL` | Public site address, for example `https://dock-the-capsule.netlify.app`. |
 | `EVENT_CODE` | Optional extra code required to join. Not needed when the site password is set. |
@@ -30,12 +30,12 @@ All secrets are Netlify environment variables. None are stored in Git, and none 
    printf '%s' 'your-event-password' | node scripts/password.mjs
    ```
    The password must be at least 12 characters. The command prints a value that starts with `scrypt$`. Only this hash is stored in Netlify; keep the password itself to share with participants at the event.
-3. **Add the variables in Netlify.** Open the `dock-the-capsule` project, go to **Project configuration → Environment variables**, and choose **Add a variable** for each of `SITE_PASSWORD_HASH`, `ANTHROPIC_API_KEY`, and optionally `DAILY_BUDGET_USD`. For `ANTHROPIC_API_KEY`, select **Contains secret values**. Limit the scope to **Functions**, and set the value for the **Production** deploy context (and for any branch deploy you use for testing).
+3. **Add the variables in Netlify.** Open the `dock-the-capsule` project, go to **Project configuration → Environment variables**, and choose **Add a variable** for each of `SITE_PASSWORD_HASH`, `ANTHROPIC_KEY`, and optionally `DAILY_BUDGET_USD`. For `ANTHROPIC_KEY`, select **Contains secret values**. Limit the scope to **Functions**, and set the value for the **Production** deploy context (and for any branch deploy you use for testing).
 
    With the Netlify CLI in a linked checkout, the equivalent is:
    ```sh
    netlify env:set SITE_PASSWORD_HASH 'scrypt$…' --context production
-   netlify env:set ANTHROPIC_API_KEY 'sk-ant-…' --secret --context production
+   netlify env:set ANTHROPIC_KEY 'sk-ant-…' --secret --context production
    netlify env:set DAILY_BUDGET_USD 25 --context production
    ```
 4. **Redeploy.** Functions read environment variables at deploy time, so trigger a new deploy (**Deploys → Trigger deploy → Deploy project**) after changing them.

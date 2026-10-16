@@ -21,7 +21,7 @@ NEEDED BEFORE THE EVENT
    src/server/app.ts, and a fourth column or a rotating panel on the TV display (src/web/leaderboard.ts).
 
 2. Configure production secrets and verify the deployed site
-   Set SITE_PASSWORD_HASH, ANTHROPIC_API_KEY, and DAILY_BUDGET_USD in Netlify (steps in DEPLOYMENT.md),
+   Set SITE_PASSWORD_HASH and DAILY_BUDGET_USD in Netlify (ANTHROPIC_KEY is already set) (steps in DEPLOYMENT.md),
    redeploy, and verify on dock-the-capsule.netlify.app: the login screen appears, AI CAPCOM answers on a
    manual flight (calls now originate from the Netlify Function, which also resolves the browser
    "Connection error" when connecting a personal key), /api/capcom returns 401 without a login, and the TV
