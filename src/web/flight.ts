@@ -71,6 +71,28 @@ if(local&&track==='agent') {
   loadAgentBrief(`${location.origin}/ap/${bridgeToken}`).then(brief=>{field.value=brief;($<HTMLButtonElement>('copy-agent-brief')).disabled=false;}).catch(error=>{note.textContent=error.message;});
   $('copy-agent-brief').onclick=()=>void copyBrief(field,note);
 }
+// HUD overlays for the hosted AI CAPCOM track: the latest CAPCOM transmission sits left of the reticle, and the keyboard reference sits on the right.
+const capcomHud=document.createElement('section');capcomHud.className='capcom-hud';capcomHud.hidden=true;capcomHud.setAttribute('aria-live','polite');
+capcomHud.innerHTML='<header><span class="capcom-dot"></span>AI CAPCOM<span class="capcom-new">NEW</span><time></time></header><p class="capcom-text"></p><p class="capcom-prev"></p>';
+const keysHud=document.createElement('section');keysHud.className='keys-hud';keysHud.hidden=true;
+const keyRows=(rows:[string,string][])=>rows.map(([name,key])=>`<li><span>${name}</span><kbd>${key}</kbd></li>`).join('');
+keysHud.innerHTML=`<button type="button" class="keys-toggle" aria-expanded="true">KEYBOARD CONTROLS<span aria-hidden="true"></span></button><div class="keys-body"><div><h3>ROTATION</h3><ul>${keyRows([['Pitch up','↑'],['Pitch down','↓'],['Yaw left','←'],['Yaw right','→'],['Roll left',','],['Roll right','.']])}</ul></div><div><h3>TRANSLATION</h3><ul>${keyRows([['Up','W'],['Down','S'],['Left','A'],['Right','D'],['Forward','E'],['Back (brake)','Q']])}</ul></div><p>One tap fires one pulse.</p></div>`;
+if(track==='manual'&&!local)document.body.append(capcomHud,keysHud);
+const keysToggle=keysHud.querySelector<HTMLButtonElement>('.keys-toggle')!;
+function setKeysOpen(open:boolean){keysHud.classList.toggle('collapsed',!open);keysToggle.setAttribute('aria-expanded',String(open));try{localStorage.setItem('dock.keys-hud',open?'open':'closed');}catch{}}
+try{if(localStorage.getItem('dock.keys-hud')==='closed')setKeysOpen(false);}catch{}
+keysToggle.onclick=()=>{setKeysOpen(keysHud.classList.contains('collapsed'));keysToggle.blur();};
+let unreadTimer=0;
+function capcomHudReset(){capcomHud.classList.remove('fresh','unread','trouble');capcomHud.querySelector('.capcom-text')!.textContent='Listening. CAPCOM transmissions will appear here.';capcomHud.querySelector('.capcom-prev')!.textContent='';capcomHud.querySelector('time')!.textContent='';}
+function capcomHudMessage(message:string,trouble=false){
+  const current=capcomHud.querySelector('.capcom-text')!, previous=capcomHud.querySelector('.capcom-prev')!;
+  if(capcomHud.querySelector('time')!.textContent)previous.textContent=current.textContent;
+  current.textContent=message;capcomHud.querySelector('time')!.textContent='T+'+flightTime(state().time_s||0);
+  // Restart the arrival animation and keep the NEW tag up long enough to be seen; nothing needs to be dismissed.
+  capcomHud.classList.toggle('trouble',trouble);capcomHud.classList.remove('fresh');void capcomHud.offsetWidth;capcomHud.classList.add('fresh','unread');
+  clearTimeout(unreadTimer);unreadTimer=window.setTimeout(()=>capcomHud.classList.remove('unread'),8000);
+}
+function showHud(flying:boolean){keysHud.hidden=!flying;capcomHud.hidden=!flying||!capcomModel();if(flying)capcomHudReset();}
 document.documentElement.classList.add('hk');
 if(track!=='manual')document.documentElement.classList.add('hk-noflight');
 ($('flight-callsign') as HTMLInputElement).value=callsign();
@@ -80,7 +102,7 @@ panel.addEventListener('keydown',e=>{if(e.key==='Escape')(e.target as HTMLElemen
 window.addEventListener('keydown',e=>{if(panel.contains(e.target as Node))return;if(/^\d$/.test(e.key)||track!=='manual'||!run)e.stopImmediatePropagation();},true);
 window.addEventListener('keyup',e=>{if(panel.contains(e.target as Node))return;if(/^\d$/.test(e.key)||track!=='manual'||!run)e.stopImmediatePropagation();},true);
 function status(message:string,kind=''){$('flight-status').textContent=message;$('flight-status').className=`flight-status ${kind}`;}
-function log(label:string,message:string){const row=text('div','');row.append(text('b',label),text('span',message));$('flight-log').append(row);while($('flight-log').children.length>35)$('flight-log').firstElementChild?.remove();$('flight-log').scrollTop=$('flight-log').scrollHeight;recent.push(`${label}: ${message}`);while(recent.length>8)recent.shift();}
+function log(label:string,message:string){if(label==='CAPCOM'||label==='CAPCOM UNAVAILABLE')capcomHudMessage(message,label!=='CAPCOM');const row=text('div','');row.append(text('b',label),text('span',message));$('flight-log').append(row);while($('flight-log').children.length>35)$('flight-log').firstElementChild?.remove();$('flight-log').scrollTop=$('flight-log').scrollHeight;recent.push(`${label}: ${message}`);while(recent.length>8)recent.shift();}
 function state(){return win.dragon?.getState() || {status:'loading',time_s:0};}
 async function cmd(name:string,opts:any={}){const result=await win.dragon.command(name,opts);if(!result.ok)throw new Error(result.error);return result.state;}
 function fit(){if(!win.camera || !win.renderer)return;const small=innerWidth<=650;const width=small?innerWidth:innerWidth-(innerWidth<=1000?300:360),height=small?Math.max(420,innerHeight*.7):innerHeight;
@@ -92,7 +114,7 @@ function allowedState(s:any){return {status:s.status,time_s:s.time_s,range:s.ran
 async function savePending(){if(!pending)return;try{await api(`/api/runs/${pending.id}/finish`,'POST',pending.body);pending=null;$('retry-score').hidden=true;$('discard-score').hidden=true;try{sessionStorage.removeItem('dock.pending-score');}catch{}status('Flight recorded. Check the live standings.','success');}catch(e){$('retry-score').hidden=false;$('discard-score').hidden=false;const permanent=[400,401,404,409].includes((e as any)?.status);status(permanent?`This result cannot be uploaded: ${displayError(e)} Discard it below to start fresh.`:`Score saved in this tab. ${displayError(e)} Retry when connected.`,'error');}}
 async function finish(outcome:'success'|'fail'|'abort',s=win.dragon?.getFlightState()||state()){
   win.dockFlightReady=false;if(!run||run.finished)return;run.finished=true;
-  panel.classList.remove('in-flight');if($('radio-form'))$('radio-form').hidden=true;($<HTMLButtonElement>('flight-launch')).disabled=false;$('flight-launch').textContent='LAUNCH ANOTHER FLIGHT ↗';$('flight-abort').hidden=true;
+  panel.classList.remove('in-flight');showHud(false);if($('radio-form'))$('radio-form').hidden=true;($<HTMLButtonElement>('flight-launch')).disabled=false;$('flight-launch').textContent='LAUNCH ANOTHER FLIGHT ↗';$('flight-abort').hidden=true;
   if(local&&track!=='manual')($<HTMLSelectElement>('challenge-select')).disabled=false;
   const body={outcome,time_s:Number(s.time_s)||0,pulses:pulseCount,message:String(s.message || '').slice(0,200),state:allowedState(s)};
   log(outcome==='success'?'DOCKED':'FLIGHT ENDED',`${flightTime(body.time_s)} simulation seconds · ${pulseCount} pulses`);
@@ -135,6 +157,7 @@ async function start(){
     win.dockFlightReady=true;document.body.classList.remove('dock-start-required');($('flight-callsign') as HTMLInputElement).disabled=true;
     panel.classList.add('in-flight');setup.open=false;panel.querySelectorAll('details').forEach(e=>e.open=false);$('flight-abort').hidden=false;
     if($('radio-form'))$('radio-form').hidden=!capcomModel();
+    showHud(true);
     if(local&&track!=='manual')($<HTMLSelectElement>('challenge-select')).disabled=true;
     if(run?.challenge && run.challenge!=='standard')log('CHALLENGE · '+CHALLENGES[run.challenge].name,CHALLENGES[run.challenge].brief);
     status(testFlight?unrankedStatus():(local?`Flight live. Your ${track==='agent'?'agent':'autopilot'} can now read telemetry and fire thrusters.`:'Flight live. Zero your attitude, then begin the approach.')+(run?.start_position&&!testFlight?' Every ranked flight starts from the same position.':''));
@@ -150,7 +173,7 @@ async function coaching(message=''){
     if(error!==capcomError)log('CAPCOM UNAVAILABLE',`${error} You can continue the flight without CAPCOM.`);capcomError=error;}finally{busy=false;}
 }
 if(!local&&track==='manual'){
-  $('capcom-model').onchange=()=>{aiDisabled=false;capcomError='';$('radio-form').hidden=!capcomModel()||!run||!!run.finished;};
+  $('capcom-model').onchange=()=>{aiDisabled=false;capcomError='';const flying=!!run&&!run.finished;$('radio-form').hidden=!capcomModel()||!flying;capcomHud.hidden=!capcomModel()||!flying;};
   $('radio-form')?.addEventListener('submit',e=>{e.preventDefault();const input=$('radio-message') as HTMLInputElement;const message=input.value.trim();input.value='';if(message){log('CREW',message);void coaching(message);}});
 }
 $('flight-launch').onclick=()=>void start();$('flight-abort').onclick=()=>void abort().catch(e=>status(displayError(e),'error'));

@@ -12,3 +12,37 @@ html.hk body.dock-flight{right:360px}html.hk #rotation-controls,html.hk #transla
 .tv.challenge-view .manual{display:none}.tv.challenge-view .tv-boards{grid-template-columns:repeat(2,minmax(0,1fr))}.tv.challenge-view .tv-header h1{font-size:clamp(28px,3.5vw,64px)}.tv-filter a{color:#8bbccd;font-size:12px}.challenge-callout{margin-top:28px;border:1px solid #564979!important}.challenge-callout .eyebrow{color:#b8a4ff}.challenge-card{transition:transform .18s,border-color .18s}.challenge-card:hover{transform:translateY(-3px);border-color:#b8a4ff}.challenge-card .button{margin-right:8px;margin-top:8px}
 @media(max-height:740px) and (min-width:651px){.dock-flight-panel{padding:10px 16px}.dock-flight-panel .agent-connect p{margin:4px 0}.dock-flight-panel .flight-clock{margin-top:8px}.dock-flight-panel .small-note{margin-top:7px}}
 .dock-flight-panel .practice-settings summary{color:#9dccdf}.dock-flight-panel .practice-settings p{font-size:11px;margin:7px 0;line-height:1.45}.dock-flight-panel .local-badge{display:none}
+
+/* HUD overlays on the AI CAPCOM track: CAPCOM transmissions left of the reticle, keyboard reference on the right. */
+.capcom-hud,.keys-hud{position:absolute;z-index:2;box-sizing:border-box;color:#eaf4fb;font-family:Lato,'Segoe UI',Arial,sans-serif;background:rgba(6,14,22,.74);border:1px solid rgba(103,228,212,.32);border-radius:8px;backdrop-filter:blur(6px);pointer-events:none}
+.capcom-hud[hidden],.keys-hud[hidden]{display:none}
+.capcom-hud{right:calc(50% + 120px);bottom:calc(50% + 70px);width:min(360px,calc(50% - 150px));max-height:calc(50% - 150px);overflow:hidden;padding:12px 16px 14px;border-left:3px solid #67e4d4;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+.capcom-hud header{display:flex;align-items:center;gap:8px;font:700 11px/1 Lato,Arial,sans-serif;letter-spacing:.16em;color:#67e4d4;margin-bottom:8px}
+.capcom-hud time{margin-left:auto;font:11px Consolas,monospace;letter-spacing:0;color:#7f9bb0}
+.capcom-dot{width:8px;height:8px;border-radius:50%;background:#67e4d4;box-shadow:0 0 8px #67e4d4}
+.capcom-new{display:none;padding:3px 6px;border-radius:3px;background:#ffbe6b;color:#1d1405;font-size:10px;letter-spacing:.1em}
+.capcom-hud.unread .capcom-new{display:inline-block}
+.capcom-hud.unread .capcom-dot{animation:capcom-blink 1s ease-in-out infinite}
+.capcom-text{margin:0;font-size:clamp(15px,1.25vw,18px);line-height:1.45;font-weight:400;text-shadow:0 1px 3px #000}
+.capcom-prev{margin:10px 0 0;padding-top:8px;border-top:1px solid rgba(127,155,176,.25);font-size:13px;line-height:1.4;color:#8ea6ba}
+.capcom-prev:empty{display:none}
+.capcom-hud.fresh{animation:capcom-arrive 2.4s ease-out}
+.capcom-hud.fresh .capcom-text{animation:capcom-text-in .45s ease-out}
+.capcom-hud.trouble{border-left-color:#ffbe6b}.capcom-hud.trouble .capcom-text{color:#ffd9a6;font-size:14px}
+@keyframes capcom-arrive{0%{border-color:#67e4d4;box-shadow:0 0 0 2px #67e4d4,0 0 34px rgba(103,228,212,.75);background:rgba(16,52,58,.9)}100%{box-shadow:0 8px 30px rgba(0,0,0,.45)}}
+@keyframes capcom-text-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes capcom-blink{50%{opacity:.25}}
+.keys-hud{right:16px;top:170px;width:292px;padding:8px 12px 10px;pointer-events:auto;font-size:12px}
+.keys-body{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}.keys-hud .keys-body p{grid-column:1/-1}
+.keys-toggle{all:unset;display:flex;justify-content:space-between;width:100%;cursor:pointer;font:700 10px/1.6 Lato,Arial,sans-serif;letter-spacing:.14em;color:#67e4d4}
+.keys-toggle span::after{content:'−'}.keys-hud.collapsed .keys-toggle span::after{content:'+'}
+.keys-toggle:focus-visible{outline:2px solid #67e4d4;outline-offset:3px}
+.keys-hud.collapsed .keys-body{display:none}
+.keys-hud h3{margin:8px 0 3px;font:700 9px Lato,Arial,sans-serif;letter-spacing:.16em;color:#7f9bb0}
+.keys-hud ul{list-style:none;margin:0;padding:0}
+.keys-hud li{display:flex;align-items:center;justify-content:space-between;height:20px;color:#d4e3ee}
+@media(max-height:780px){.keys-hud{top:160px;padding-bottom:6px}.keys-hud li{height:17px}.keys-hud h3{margin-top:5px}.keys-hud p{display:none}}
+@media(min-height:1000px){.keys-hud{top:200px;width:180px}.keys-body{display:block}.keys-hud li{height:21px}}
+.keys-hud kbd{min-width:22px;height:18px;padding:0 5px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;border:1px solid #5b7487;border-bottom-width:2px;border-radius:4px;background:#13212e;color:#fff;font:700 12px/1 'Segoe UI',Arial,sans-serif}
+.keys-hud p{margin:7px 0 0;font-size:10px;color:#7f9bb0}
+@media(max-width:650px){.capcom-hud{right:auto;left:12px;bottom:auto;top:70px;width:calc(100% - 24px)}.keys-hud{display:none}}

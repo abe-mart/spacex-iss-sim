@@ -438,7 +438,7 @@ function showInterface() {
         interfaceAnimationIn.fromTo("#hud-ring", 1.5, { rotation: 180 }, { rotation: 0, ease: "expo.out" }, 2),
         interfaceAnimationIn.fromTo("#hud-ring-inner", 1.5, { rotation: -180 }, { rotation: 0, ease: "expo.out" }, 2),
         interfaceAnimationIn.fromTo("#hud-ring, #hud-ring-inner", 1.5, { autoAlpha: 0 }, { autoAlpha: 1, ease: "none" }, 2),
-        interfaceAnimationIn.staggerFromTo("#hud .hud-item .error, #hud .hud-item .rate, #pyr .distance", 1, { autoAlpha: 0 }, { autoAlpha: 1, ease: "none" }, 0.1, 3),
+        interfaceAnimationIn.staggerFromTo("#hud .hud-item .error, #hud .hud-item .rate, #pyr .distance, #pyr .axis-rate", 1, { autoAlpha: 0 }, { autoAlpha: 1, ease: "none" }, 0.1, 3),
         interfaceAnimationIn.fromTo("#range .label", 1, { scrambleText: { text: " " } }, { scrambleText: { text: "RANGE", chars: "0123456789!@#$%^&*()" }, ease: "none" }, 3),
         interfaceAnimationIn.fromTo("#rate .label", 1, { scrambleText: { text: " " } }, { scrambleText: { text: "RATE", chars: "0123456789!@#$%^&*()" }, ease: "none" }, 3),
         interfaceAnimationIn.fromTo("#roll-label", 1, { scrambleText: { text: " " } }, { scrambleText: { text: "ROLL", chars: "0123456789!@#$%^&*()" }, ease: "none" }, 3.25),
@@ -458,7 +458,7 @@ function hideInterface(t) {
         })),
         interfaceAnimationOut.to("#hud-darken", 0.5, { autoAlpha: 0, ease: Linear.easeOut }, 0),
         interfaceAnimationOut.to("#hud, #iss_target, #navball, #helpers", 1.5, { autoAlpha: 0, ease: Linear.easeOut }, 0),
-        interfaceAnimationOut.to("#hud .hud-item .error, #hud .hud-item .rate, #pyr .distance", 0.5, { autoAlpha: 0, ease: "none" }, 0),
+        interfaceAnimationOut.to("#hud .hud-item .error, #hud .hud-item .rate, #pyr .distance, #pyr .axis-rate", 0.5, { autoAlpha: 0, ease: "none" }, 0),
         interfaceAnimationOut.to("#range .label", 1.5, { scrambleText: { text: " ", chars: "0123456789!@#$%^&*()" }, ease: "none" }, 0),
         interfaceAnimationOut.to("#rate .label", 1.5, { scrambleText: { text: " ", chars: "0123456789!@#$%^&*()" }, ease: "none" }, 0),
         interfaceAnimationOut.to("#roll-label", 1.5, { scrambleText: { text: " ", chars: "0123456789!@#$%^&*()" }, ease: "none" }, 0),
@@ -1364,6 +1364,7 @@ function render() {
             r = camera.position.x - issObject.position.x,
             i = camera.position.y - issObject.position.y;
         ($("#x-range .distance").innerHTML = a.toFixed(1) + " m"), ($("#y-range .distance").innerHTML = r.toFixed(1) + " m"), ($("#z-range .distance").innerHTML = i.toFixed(1) + " m");
+        updateAxisRate("#x-range", motionVector.z * PHYSICS_HZ), updateAxisRate("#y-range", motionVector.x * PHYSICS_HZ), updateAxisRate("#z-range", motionVector.y * PHYSICS_HZ);
         var n = Math.sqrt(a * a + r * r + i * i);
         if ((($("#range .rate").innerHTML = n.toFixed(1) + " m"), (rangeRateCounter += 1), 20 <= rangeRateCounter)) {
             rangeRateCounter = 0;
@@ -1553,6 +1554,14 @@ function updateWormRateColor(t, e) {
                 : o >= wormRateWarning && ($("#worm-" + e).classList.add("warning"), $("#" + e + " .rate").classList.add("warning")));
 }
 var rateCategory = "";
+// Velocity along one HUD axis (m/s), colored like the range rate: caution above the docking limit, warning above 5x it.
+function updateAxisRate(t, e) {
+    var o = $(t + " .axis-rate"),
+        a = Math.abs(e);
+    (o.textContent = (a < 0.005 ? "0.00" : (0 > e ? "\u2212" : "+") + a.toFixed(2)) + " m/s"),
+        o.classList.toggle("caution", a > toleranceRate * PHYSICS_HZ && a < 5 * toleranceRate * PHYSICS_HZ),
+        o.classList.toggle("warning", a >= 5 * toleranceRate * PHYSICS_HZ);
+}
 function updateRateColor(t) {
     if (t !== rateCategory) {
         var e = $("#rate .rate");

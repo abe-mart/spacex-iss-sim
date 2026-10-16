@@ -231,6 +231,26 @@ h3 {
     font: 12px/18px Lato, Verdana, Arial, geneva, sans-serif;
     color: #2aff00;
 }
+#pyr {
+    width: auto;
+}
+#pyr > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    white-space: nowrap;
+}
+.axis-rate {
+    font: 11px/18px Lato, Verdana, Arial, geneva, sans-serif;
+    color: #24d2fd;
+    transition: color 1s ease;
+}
+.axis-rate.caution {
+    color: orange;
+}
+.axis-rate.warning {
+    color: red;
+}
 .label {
     font-size: 10px;
     color: #ccc;
