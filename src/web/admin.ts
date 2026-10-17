@@ -57,5 +57,13 @@ $('archive-reset-form').addEventListener('submit',async e=>{
  $<HTMLFormElement>('archive-reset-form').reset();await load();status('The event was archived and the leaderboard was reset.');}
  catch(e){status(displayError(e));}finally{button.disabled=false;}
 });
+$('manual-score-form').addEventListener('submit',async e=>{
+ e.preventDefault();const entry=e.target as HTMLFormElement,button=$<HTMLButtonElement>('manual-score-add');button.disabled=true;
+ const value=(name:string)=>(entry.elements.namedItem(name) as HTMLInputElement).value.trim();
+ const model=value('model');
+ try{await api('/api/admin/runs','POST',{callsign:value('callsign'),track:value('track'),time_s:Number(value('time_s')),pulses:value('pulses')?Number(value('pulses')):undefined,model,assisted:!!model,note:value('note')});
+ entry.reset();await load();status('Score added to the leaderboard.');}
+ catch(err){status(displayError(err));}finally{button.disabled=false;}
+});
 void load().catch(e=>{if((e as any).status!==401)status(displayError(e));});
 

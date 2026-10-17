@@ -58,8 +58,9 @@ export function validateFinish(body: Record<string, unknown>, run: Run) {
     const state=body.state as Record<string,unknown> | undefined;
     if(!state || state.status!=='success') throw new ApiError(400,'Docking telemetry is required.');
     if(state.gravity!==true) throw new ApiError(400,'Gravity must remain enabled for event flights.');
-    number(state.range,0,0.2,'docking range');
-    if(Number(state.range)>=0.2) throw new ApiError(400,'Capsule is outside the docking range.');
+    // The simulator docks at range < 0.2 m but reports range rounded to the millimetre, so a
+    // docking at 0.1995–0.2 m arrives as 0.2. Accept it; anything larger is outside the range.
+    if(typeof state.range!=='number' || !Number.isFinite(state.range) || state.range<0 || state.range>0.2) throw new ApiError(400,'Capsule is outside the docking range.');
     for(const group of ['attitude','velocity'] as const) {
       const vector=state[group] as Record<string,unknown> | undefined;
       const axes=group==='attitude'?['roll','pitch','yaw']:['x','y','z'];
@@ -277,6 +278,21 @@ export function createApp(store: Store, options: Options={}) {
           if(u.protocol!=='https:' && !isLoopbackOrigin(u.origin)) throw new ApiError(400,'Join URL must use HTTPS.'); next.join_url=u.href.slice(0,250); }
         if(Array.isArray(b.enabled_tracks)) { if(!b.enabled_tracks.length || b.enabled_tracks.some(t=>!TRACKS.includes(t as Track))) throw new ApiError(400,'Enable at least one valid track.'); next.enabled_tracks=[...new Set(b.enabled_tracks)] as Track[]; }
         await store.saveSettings(next); return respond(publicSettings(next,!!options.development));
+      }
+      // Staff enter dockings that happened but were not recorded (for example, a lost upload).
+      if(path==='/api/admin/runs' && request.method==='POST') {
+        await who('admin'); const b=await body();
+        if(!TRACKS.includes(b.track as Track)) throw new ApiError(400,'Choose a track.');
+        const time=number(b.time_s,5,7200,'docking time (5–7200 seconds)');
+        const pulses=b.pulses===undefined||b.pulses===null||b.pulses===''?0:number(b.pulses,0,100000,'pulse count');
+        if(!Number.isInteger(pulses)) throw new ApiError(400,'Pulse count must be a whole number.');
+        const note=typeof b.note==='string'?b.note.trim().slice(0,160):'';
+        const now=Date.now();
+        const run: Run={event_id:s.event_id || 'legacy',id:randomUUID(),participant_id:'staff-entry',callsign:cleanName(b.callsign),track:b.track as Track,
+          source:'hosted',assisted:b.track==='manual'&&b.assisted===true,model:typeof b.model==='string'?b.model.trim().slice(0,80):'',
+          rules_version:s.rules_version,challenge:'standard',created_at:now,finished_at:now,outcome:'success',
+          time_s:Math.round(time*1000)/1000,pulses,message:'Entered by staff'+(note?': '+note:''),excluded:false};
+        await store.createRun(run); return respond(run,201);
       }
       const moderation=path.match(/^\/api\/admin\/runs\/([a-f0-9-]{36})$/);
       if(moderation && request.method==='PATCH') {

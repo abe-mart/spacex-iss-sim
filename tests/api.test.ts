@@ -121,6 +121,11 @@ test('invalid docking telemetry and clock mismatches cannot enter the leaderboar
   }
   assert.equal((await f.call('/api/leaderboard')).data.stats.dockings,0);
 });
+test('a docking just inside 0.2 m, reported rounded to 0.2, is accepted',async()=>{
+  const f=fixture(),token=await f.join(),id=await f.launch(token);
+  assert.equal((await f.call(`/api/runs/${id}/finish`,'POST',{outcome:'success',time_s:85.3,pulses:120,state:{...state,range:.2}},token)).response.status,200);
+  assert.equal((await f.call('/api/leaderboard')).data.stats.dockings,1);
+});
 test('staff session authorizes reversible exclusions; participant cannot moderate',async()=>{
   const f=fixture(),token=await f.join(),id=await f.launch(token);
   await f.call(`/api/runs/${id}/finish`,'POST',{outcome:'success',time_s:85.3,pulses:120,state},token);
@@ -132,6 +137,17 @@ test('staff session authorizes reversible exclusions; participant cannot moderat
   assert.equal((await f.call('/api/leaderboard')).data.boards.autopilot.length,0);
   await f.call(`/api/admin/runs/${id}`,'PATCH',{excluded:false},'', 'https://dock.test',cookie);
   assert.equal((await f.call('/api/leaderboard')).data.boards.autopilot.length,1);
+});
+test('staff can add a missed docking to the leaderboard; participants cannot',async()=>{
+  const f=fixture(),token=await f.join();
+  const entry={callsign:'Late Crew',track:'manual',time_s:142.5,pulses:88,model:'',note:'Upload rejected'};
+  assert.equal((await f.call('/api/admin/runs','POST',entry,token)).response.status,401);
+  const cookie=(await f.call('/api/admin/login','POST',{password:'long-staff-password'})).response.headers.get('set-cookie')!.split(';')[0];
+  assert.equal((await f.call('/api/admin/runs','POST',{...entry,time_s:2},'','https://dock.test',cookie)).response.status,400);
+  const added=await f.call('/api/admin/runs','POST',entry,'','https://dock.test',cookie);
+  assert.equal(added.response.status,201);assert.equal(added.data.message,'Entered by staff: Upload rejected');
+  const board=(await f.call('/api/leaderboard')).data;
+  assert.equal(board.boards.manual.length,1);assert.equal(board.boards.manual[0].callsign,'Late Crew');assert.equal(board.boards.manual[0].time_s,142.5);
 });
 test('localhost result submissions use restricted CORS; foreign origins are denied',async()=>{
   const f=fixture();const local=await f.call('/api/join','POST',{callsign:'LOCAL'},'','http://127.0.0.1:49500');
